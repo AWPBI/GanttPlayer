@@ -531,7 +531,23 @@
                 { name: 'Christmas', date: '2024-12-25' },
             ];
 
-            const mutablity = new Gantt('#mutability', tasks);
+            const mutablity = new Gantt('#mutability', tasks, {
+                on_start: () => {
+                    console.log('Player started');
+                },
+                on_stop: () => {
+                    console.log('Player stopped');
+                },
+                on_reset: () => {
+                    console.log('Player reset');
+                },
+                on_bar_enter: (task) => {
+                    console.log(`Marker entered bar: ${task.name}`, task);
+                },
+                on_bar_exit: (task) => {
+                    console.log(`Marker exited bar: ${task.name}`, task);
+                }
+            });
             const sideheader = new Gantt('#sideheader', tasksSpread, {
                 today_button: true,
                 view_mode_select: true,

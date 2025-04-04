@@ -14,6 +14,7 @@ export default class Gantt {
         this.setup_wrapper(wrapper);
         this.setup_options(options);
         this.setup_tasks(tasks);
+        this.overlapping_tasks = new Set();
         this.change_view_mode();
         this.bind_events();
     }
@@ -93,6 +94,13 @@ export default class Gantt {
             ignored_positions: [],
             extend_by_units: 10,
         };
+
+        if (this.options.player_button) {
+            this.options.player_state = false;
+        }
+        if (this.options.custom_marker) {
+            this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
+        }
 
         if (typeof this.options.ignore !== 'function') {
             if (typeof this.options.ignore === 'string')
@@ -506,6 +514,26 @@ export default class Gantt {
             this.$side_header.prepend($today_button);
             this.$today_button = $today_button;
         }
+
+        // Create player reset button
+        if (this.options.player_button) {
+            let $player_button = document.createElement('button');
+            $player_button.classList.add('player-reset-button');
+            $player_button.textContent = "Reset"//❚❚
+            $player_button.onclick = this.reset_play.bind(this);
+            this.$side_header.prepend($player_button);
+            this.$player_button = $player_button;
+        }
+
+        // Create player button
+        if (this.options.player_button) {
+            let $player_button = document.createElement('button');
+            $player_button.classList.add('player-button');
+            $player_button.textContent = "Play"//❚❚
+            $player_button.onclick = this.toggle_play.bind(this);
+            this.$side_header.prepend($player_button);
+            this.$player_button = $player_button;
+        }
     }
 
     make_grid_ticks() {
@@ -713,7 +741,7 @@ export default class Gantt {
         const [_, el] = res;
         el.classList.add('custom-date-highlight');
 
-        const dateObj = new Date(date);
+        const dateObj = date;
 
         const diff_in_units = date_utils.diff(
             dateObj,
@@ -792,8 +820,9 @@ export default class Gantt {
         let highlightDimensionsCustom;
         if (this.options.custom_marker) {
             highlightDimensionsCustom = this.highlight_custom(
-                this.options.custom_marker_init_date
+                this.config.custom_marker_date
             );
+
         }
         if (!highlightDimensions || !highlightDimensionsCustom) return;
     }
@@ -961,6 +990,8 @@ export default class Gantt {
             date = this.gantt_end;
         } else if (date === 'today') {
             return this.scroll_current();
+        } else if (date === 'custom') {
+            return this.scroll_custom_marker();
         } else if (typeof date === 'string') {
             date = date_utils.parse(date);
         }
@@ -1023,11 +1054,76 @@ export default class Gantt {
         if (res) this.set_scroll_position(res[0]);
     }
 
+    scroll_custom_marker() {
+        let res = this.get_closest_date_to(this.config.custom_marker_date);
+        if (res) this.set_scroll_position(date_utils.add(res[0], -2, this.config.unit));
+        else {
+            this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
+            let res = this.get_closest_date_to(this.config.custom_marker_date);
+            if (res) this.set_scroll_position(date_utils.add(res[0], -2, this.config.unit));
+        }
+    }
+
+    player_update() {
+        this.config.custom_marker_date = date_utils.add(
+            this.config.custom_marker_date,
+            this.config.step,
+            this.config.unit,
+        );
+
+        if (this.options.custom_marker) {
+            const current_date = this.config.custom_marker_date;
+            const new_overlapping = new Set(
+                this.tasks.filter(task => task._start <= current_date && current_date < task._end)
+                    .map(task => task.id)
+            );
+
+            const entered_tasks = [...new_overlapping].filter(id => !this.overlapping_tasks.has(id));
+            const exited_tasks = [...this.overlapping_tasks].filter(id => !new_overlapping.has(id));
+
+            entered_tasks.forEach(id => {
+                const task = this.get_task(id);
+                this.trigger_event('bar_enter', [task]);
+            });
+
+            exited_tasks.forEach(id => {
+                const task = this.get_task(id);
+                this.trigger_event('bar_exit', [task]);
+            });
+
+            this.overlapping_tasks = new_overlapping;
+        }
+
+        this.options.scroll_to = "custom";
+        this.render();
+    }
+
+    toggle_play() {
+        this.options.player_state = !this.options.player_state
+        console.log("toggled", this.options.player_state)
+        if (this.options.player_state) {
+            this.player_interval = setInterval(this.player_update.bind(this), this.options.player_interval * 1000)
+            this.trigger_event('start', []);
+        }
+        else {
+            this.trigger_event('stop', []);
+            clearInterval(this.player_interval)
+        }
+    }
+
+    reset_play() {
+        this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
+        this.options.player_state = false
+        clearInterval(this.player_interval)
+        this.render()
+        this.trigger_event('reset', []);
+    }
+
     get_closest_date_to(date) {
-        let newDate = new Date(date);
+        let newDate = date;
         if (newDate < this.gantt_start || newDate > this.gantt_end) return null;
 
-        let current = new Date(date),
+        let current = date,
             el = this.$container.querySelector(
                 '.date_' +
                 sanitize(

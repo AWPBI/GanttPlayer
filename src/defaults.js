@@ -155,8 +155,11 @@ const DEFAULT_OPTIONS = {
     view_mode: 'Day',
     view_mode_select: false,
     view_modes: DEFAULT_VIEW_MODES,
+
     custom_marker: false,
     custom_marker_init_date: "2025-04-01T00:00:00Z",
+    player_button: false,
+    player_interval: 1,
 };
 
 export { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES };
