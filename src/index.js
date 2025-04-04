@@ -41,7 +41,7 @@ export default class Gantt {
         } else {
             throw new TypeError(
                 'Frappe Gantt only supports usage of a string CSS selector,' +
-                    " HTML DOM element or SVG DOM element for the 'element' parameter",
+                " HTML DOM element or SVG DOM element for the 'element' parameter",
             );
         }
 
@@ -397,10 +397,10 @@ export default class Gantt {
         const grid_width = this.dates.length * this.config.column_width;
         const grid_height = Math.max(
             this.config.header_height +
-                this.options.padding +
-                (this.options.bar_height + this.options.padding) *
-                    this.tasks.length -
-                10,
+            this.options.padding +
+            (this.options.bar_height + this.options.padding) *
+            this.tasks.length -
+            10,
             this.options.container_height !== 'auto'
                 ? this.options.container_height
                 : 0,
@@ -667,13 +667,15 @@ export default class Gantt {
      */
     highlight_current() {
         const res = this.get_closest_date();
-        if (!res) return;
+        if (!res) return null;
 
         const [_, el] = res;
         el.classList.add('current-date-highlight');
 
+        const dateObj = new Date();
+
         const diff_in_units = date_utils.diff(
-            new Date(),
+            dateObj,
             this.gantt_start,
             this.config.unit,
         );
@@ -696,6 +698,48 @@ export default class Gantt {
             classes: 'current-ball-highlight',
             append_to: this.$header,
         });
+        return { left, dateObj }
+    }
+
+    /**
+     * Compute the horizontal x-axis distance and associated date for the custom date and view.
+     *
+     * @returns Object containing the x-axis distance and date of the custom date, or null if the custom date is out of the gantt range.
+     */
+    highlight_custom(date) {
+        const res = this.get_closest_date_to(date);
+        if (!res) return null;
+
+        const [_, el] = res;
+        el.classList.add('custom-date-highlight');
+
+        const dateObj = new Date(date);
+
+        const diff_in_units = date_utils.diff(
+            dateObj,
+            this.gantt_start,
+            this.config.unit,
+        );
+
+        const left =
+            (diff_in_units / this.config.step) * this.config.column_width;
+
+        this.$custom_highlight = this.create_el({
+            top: this.config.header_height,
+            left,
+            height: this.grid_height - this.config.header_height,
+            classes: 'custom-highlight',
+            append_to: this.$container,
+        });
+        this.$custom_ball_highlight = this.create_el({
+            top: this.config.header_height - 6,
+            left: left - 2.5,
+            width: 6,
+            height: 6,
+            classes: 'custom-ball-highlight',
+            append_to: this.$header,
+        });
+        return { left, dateObj }
     }
 
     make_grid_highlights() {
@@ -743,11 +787,15 @@ export default class Gantt {
             });
         }
 
-        const highlightDimensions = this.highlight_current(
-            this.config.view_mode,
-        );
+        const highlightDimensions = this.highlight_current();
 
-        if (!highlightDimensions) return;
+        let highlightDimensionsCustom;
+        if (this.options.custom_marker) {
+            highlightDimensionsCustom = this.highlight_custom(
+                this.options.custom_marker_init_date
+            );
+        }
+        if (!highlightDimensions || !highlightDimensionsCustom) return;
     }
 
     create_el({ left, top, width, height, id, classes, append_to, type }) {
@@ -957,7 +1005,7 @@ export default class Gantt {
         this.current_date = date_utils.add(
             this.gantt_start,
             (this.$container.scrollLeft + $el.clientWidth) /
-                this.config.column_width,
+            this.config.column_width,
             this.config.unit,
         );
         current_upper = this.config.view_mode.upper_text(
@@ -975,20 +1023,20 @@ export default class Gantt {
         if (res) this.set_scroll_position(res[0]);
     }
 
-    get_closest_date() {
-        let now = new Date();
-        if (now < this.gantt_start || now > this.gantt_end) return null;
+    get_closest_date_to(date) {
+        let newDate = new Date(date);
+        if (newDate < this.gantt_start || newDate > this.gantt_end) return null;
 
-        let current = new Date(),
+        let current = new Date(date),
             el = this.$container.querySelector(
                 '.date_' +
-                    sanitize(
-                        date_utils.format(
-                            current,
-                            this.config.date_format,
-                            this.options.language,
-                        ),
+                sanitize(
+                    date_utils.format(
+                        current,
+                        this.config.date_format,
+                        this.options.language,
                     ),
+                ),
             );
 
         // safety check to prevent infinite loop
@@ -997,13 +1045,57 @@ export default class Gantt {
             current = date_utils.add(current, -1, this.config.unit);
             el = this.$container.querySelector(
                 '.date_' +
-                    sanitize(
-                        date_utils.format(
-                            current,
-                            this.config.date_format,
-                            this.options.language,
-                        ),
+                sanitize(
+                    date_utils.format(
+                        current,
+                        this.config.date_format,
+                        this.options.language,
                     ),
+                ),
+            );
+            c++;
+        }
+        return [
+            new Date(
+                date_utils.format(
+                    current,
+                    this.config.date_format,
+                    this.options.language,
+                ) + ' ',
+            ),
+            el,
+        ];
+    }
+
+    get_closest_date() {
+        let now = new Date();
+        if (now < this.gantt_start || now > this.gantt_end) return null;
+
+        let current = new Date(),
+            el = this.$container.querySelector(
+                '.date_' +
+                sanitize(
+                    date_utils.format(
+                        current,
+                        this.config.date_format,
+                        this.options.language,
+                    ),
+                ),
+            );
+
+        // safety check to prevent infinite loop
+        let c = 0;
+        while (!el && c < this.config.step) {
+            current = date_utils.add(current, -1, this.config.unit);
+            el = this.$container.querySelector(
+                '.date_' +
+                sanitize(
+                    date_utils.format(
+                        current,
+                        this.config.date_format,
+                        this.options.language,
+                    ),
+                ),
             );
             c++;
         }
@@ -1162,9 +1254,9 @@ export default class Gantt {
                 if (
                     !extended &&
                     e.currentTarget.scrollWidth -
-                        (e.currentTarget.scrollLeft +
-                            e.currentTarget.clientWidth) <=
-                        trigger
+                    (e.currentTarget.scrollLeft +
+                        e.currentTarget.clientWidth) <=
+                    trigger
                 ) {
                     let old_scroll_left = e.currentTarget.scrollLeft;
                     extended = true;
@@ -1195,7 +1287,7 @@ export default class Gantt {
             this.current_date = date_utils.add(
                 this.gantt_start,
                 (e.currentTarget.scrollLeft / this.config.column_width) *
-                    this.config.step,
+                this.config.step,
                 this.config.unit,
             );
 
@@ -1213,7 +1305,7 @@ export default class Gantt {
                 this.gantt_start,
                 ((e.currentTarget.scrollLeft + $el.clientWidth) /
                     this.config.column_width) *
-                    this.config.step,
+                this.config.step,
                 this.config.unit,
             );
             current_upper = this.config.view_mode.upper_text(
@@ -1335,6 +1427,7 @@ export default class Gantt {
 
     bind_bar_progress() {
         let x_on_start = 0;
+        let y_on_start = 0;
         let is_resizing = null;
         let bar = null;
         let $bar_progress = null;
@@ -1556,6 +1649,9 @@ export default class Gantt {
         this.$header?.remove?.();
         this.$side_header?.remove?.();
         this.$current_highlight?.remove?.();
+        this.$custom_highlight?.remove?.();
+        this.$current_ball_highlight?.remove?.();
+        this.$custom_ball_highlight?.remove?.();
         this.$extras?.remove?.();
         this.popup?.hide?.();
     }

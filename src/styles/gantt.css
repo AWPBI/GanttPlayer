@@ -192,6 +192,20 @@
         border-radius: 50%;
     }
 
+    & .custom-highlight {
+        position: absolute;
+        background: var(--g-custom-highlight);
+        width: 1px;
+        z-index: 999;
+    }
+
+    & .custom-ball-highlight {
+        position: absolute;
+        background: var(--g-custom-highlight);
+        z-index: 1001;
+        border-radius: 50%;
+    }
+
     & .current-date-highlight {
         background: var(--g-today-highlight);
         color: var(--g-text-light);
