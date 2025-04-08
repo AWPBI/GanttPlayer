@@ -158,6 +158,7 @@ const DEFAULT_OPTIONS = {
 
     custom_marker: false,
     custom_marker_init_date: "2025-04-01T00:00:00Z",
+    player_end_date: "2025-04-03T00:00:00Z",
     player_button: false,
     player_interval: 1,
 };

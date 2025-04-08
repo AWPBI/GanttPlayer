@@ -101,7 +101,9 @@ export default class Gantt {
         if (this.options.custom_marker) {
             this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
         }
-
+        if (this.options.player_end_date) {
+            this.config.player_end_date = new Date(this.options.player_end_date);
+        }
         if (typeof this.options.ignore !== 'function') {
             if (typeof this.options.ignore === 'string')
                 this.options.ignore = [this.options.ignord];
@@ -1056,11 +1058,11 @@ export default class Gantt {
 
     scroll_custom_marker() {
         let res = this.get_closest_date_to(this.config.custom_marker_date);
-        if (res) this.set_scroll_position(date_utils.add(res[0], -2, this.config.unit));
+        if (res && res[0] < this.config.player_end_date) this.set_scroll_position(date_utils.add(res[0], -3, this.config.unit));
         else {
             this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
             let res = this.get_closest_date_to(this.config.custom_marker_date);
-            if (res) this.set_scroll_position(date_utils.add(res[0], -2, this.config.unit));
+            if (res) this.set_scroll_position(date_utils.add(res[0], -3, this.config.unit));
         }
     }
 
@@ -1096,7 +1098,6 @@ export default class Gantt {
 
         this.options.scroll_to = "custom";
         this.render();
-        console.log(this.config.custom_marker_date)
     }
 
     toggle_play() {
