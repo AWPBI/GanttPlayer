@@ -1096,6 +1096,7 @@ export default class Gantt {
 
         this.options.scroll_to = "custom";
         this.render();
+        console.log(this.config.custom_marker_date)
     }
 
     toggle_play() {
