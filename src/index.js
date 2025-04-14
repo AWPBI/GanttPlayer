@@ -519,19 +519,33 @@ export default class Gantt {
 
         // Create player reset button
         if (this.options.player_button) {
-            let $player_button = document.createElement('button');
-            $player_button.classList.add('player-reset-button');
-            $player_button.textContent = "Reset"//❚❚
-            $player_button.onclick = this.reset_play.bind(this);
-            this.$side_header.prepend($player_button);
-            this.$player_button = $player_button;
+            let player_reset_button = document.createElement('button');
+            player_reset_button.classList.add('player-reset-button');
+            if (this.options.player_use_fa) {
+                player_reset_button.classList.add('fas', 'fa-redo-alt');
+            }
+            else {
+                player_reset_button.textContent = "Reset"//❚❚
+            }
+            player_reset_button.onclick = this.reset_play.bind(this);
+            this.$side_header.prepend(player_reset_button);
+            this.$player_reset_button = player_reset_button;
         }
 
         // Create player button
         if (this.options.player_button) {
             let $player_button = document.createElement('button');
             $player_button.classList.add('player-button');
-            $player_button.textContent = "Play"//❚❚
+            if (this.options.player_use_fa) {
+                $player_button.classList.add('fas')
+                if (this.options.player_state)
+                    $player_button.classList.add('fa-pause-circle')
+                else
+                    $player_button.classList.add('fa-play-circle')
+            }
+            else {
+                $player_button.textContent = "Play";
+            }
             $player_button.onclick = this.toggle_play.bind(this);
             this.$side_header.prepend($player_button);
             this.$player_button = $player_button;
@@ -1060,9 +1074,17 @@ export default class Gantt {
         let res = this.get_closest_date_to(this.config.custom_marker_date);
         if (res && res[0] < this.config.player_end_date) this.set_scroll_position(date_utils.add(res[0], -3, this.config.unit));
         else {
-            this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
-            let res = this.get_closest_date_to(this.config.custom_marker_date);
-            if (res) this.set_scroll_position(date_utils.add(res[0], -3, this.config.unit));
+            if (this.options.player_loop) {
+                this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
+                let res = this.get_closest_date_to(this.config.custom_marker_date);
+                if (res) this.set_scroll_position(date_utils.add(res[0], -3, this.config.unit));
+            }
+            else {
+                this.options.player_state = false
+                this.overlapping_tasks.clear()
+                clearInterval(this.player_interval)
+                this.trigger_event('stop', []);
+            }
         }
     }
 
@@ -1116,6 +1138,7 @@ export default class Gantt {
     reset_play() {
         this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
         this.options.player_state = false
+        this.overlapping_tasks.clear()
         clearInterval(this.player_interval)
         this.render()
         this.trigger_event('reset', []);

@@ -157,10 +157,12 @@ const DEFAULT_OPTIONS = {
     view_modes: DEFAULT_VIEW_MODES,
 
     custom_marker: false,
-    custom_marker_init_date: "2025-04-01T00:00:00Z",
-    player_end_date: "2025-04-03T00:00:00Z",
+    custom_marker_init_date: "2025-04-08T00:00:00Z",
+    player_end_date: "2025-04-17T00:00:00Z",
     player_button: false,
     player_interval: 1,
+    player_loop: false,
+    player_use_fa: false,
 };
 
 export { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES };
