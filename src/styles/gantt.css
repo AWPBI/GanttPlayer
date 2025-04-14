@@ -5,7 +5,7 @@
     position: relative;
     overflow: auto;
     font-size: 12px;
-    height: var(--gv-grid-height);
+    height: calc(var(--gv-grid-height) + 17px);
     width: 100%;
     border-radius: 8px;
 
