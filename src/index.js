@@ -522,7 +522,7 @@ export default class Gantt {
             let player_reset_button = document.createElement('button');
             player_reset_button.classList.add('player-reset-button');
             if (this.options.player_use_fa) {
-                player_reset_button.classList.add('fas', 'fa-redo-alt');
+                player_reset_button.classList.add('fas', 'fa-redo');
             }
             else {
                 player_reset_button.textContent = "Reset"//❚❚
@@ -539,9 +539,9 @@ export default class Gantt {
             if (this.options.player_use_fa) {
                 $player_button.classList.add('fas')
                 if (this.options.player_state)
-                    $player_button.classList.add('fa-pause-circle')
+                    $player_button.classList.add('fa-pause')
                 else
-                    $player_button.classList.add('fa-play-circle')
+                    $player_button.classList.add('fa-play')
             }
             else {
                 $player_button.textContent = "Play";
@@ -1126,10 +1126,18 @@ export default class Gantt {
         this.options.player_state = !this.options.player_state
         console.log("toggled", this.options.player_state)
         if (this.options.player_state) {
-            this.player_interval = setInterval(this.player_update.bind(this), this.options.player_interval * 1000)
+            this.player_interval = setInterval(this.player_update.bind(this), this.options.player_interval)
             this.trigger_event('start', []);
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-play')
+                this.$player_button.classList.add('fa-pause')
+            }
         }
         else {
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-pause')
+                this.$player_button.classList.add('fa-play')
+            }
             this.trigger_event('stop', []);
             clearInterval(this.player_interval)
         }
