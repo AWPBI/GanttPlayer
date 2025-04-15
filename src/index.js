@@ -1084,8 +1084,8 @@ export default class Gantt {
                 this.options.player_state = false
                 this.overlapping_tasks.clear()
                 clearInterval(this.player_interval)
-                this.trigger_event('stop', []);
             }
+            this.trigger_event('finish', []);
         }
     }
 
