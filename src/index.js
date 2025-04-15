@@ -1138,7 +1138,7 @@ export default class Gantt {
                 this.$player_button.classList.remove('fa-pause')
                 this.$player_button.classList.add('fa-play')
             }
-            this.trigger_event('stop', []);
+            this.trigger_event('pause', []);
             clearInterval(this.player_interval)
         }
     }
