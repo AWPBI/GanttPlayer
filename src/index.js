@@ -876,14 +876,14 @@ export default class Gantt {
             highlightDimensionsCustom = this.highlight_custom(
                 this.config.custom_marker_date,
             );
-            if (this.options.player_state && highlightDimensionsCustom) {
-                this.play_animated_highlight(
-                    highlightDimensionsCustom.left,
-                    highlightDimensionsCustom.dateObj,
-                );
-            }
         }
         if (!highlightDimensions || !highlightDimensionsCustom) return;
+        if (this.options.player_state) {
+            this.play_animated_highlight(
+                highlightDimensionsCustom.left,
+                highlightDimensionsCustom.dateObj,
+            );
+        }
     }
 
     create_el({ left, top, width, height, id, classes, append_to, type }) {
