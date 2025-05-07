@@ -880,7 +880,8 @@ export default class Gantt {
         if (!highlightDimensions || !highlightDimensionsCustom) return;
         if (this.options.player_state) {
             try {
-                this.ani_highlight(
+                const aniHighlight = this.ani_highlight.bind(this);
+                aniHighlight(
                     highlightDimensionsCustom.left,
                     highlightDimensionsCustom.dateObj,
                 );
