@@ -352,16 +352,45 @@ export default class Gantt {
     }
 
     render() {
-        this.clear();
-        this.setup_layers();
-        this.make_grid();
-        this.make_dates();
-        this.make_grid_extras();
-        this.make_bars();
-        this.make_arrows();
-        this.map_arrows_on_bars();
-        this.set_dimensions();
-        this.set_scroll_position(this.options.scroll_to);
+        try {
+            // Validate critical state before rendering
+            if (!this.gantt_start || !this.gantt_end) {
+                console.error('Invalid gantt_start or gantt_end', {
+                    gantt_start: this.gantt_start,
+                    gantt_end: this.gantt_end,
+                });
+                return;
+            }
+            if (!this.config.custom_marker_date) {
+                this.config.custom_marker_date = new Date(
+                    this.options.custom_marker_init_date || Date.now(),
+                );
+            }
+            if (
+                this.config.custom_marker_date < this.gantt_start ||
+                this.config.custom_marker_date > this.gantt_end
+            ) {
+                console.warn('custom_marker_date out of bounds, resetting', {
+                    custom_marker_date: this.config.custom_marker_date,
+                    gantt_start: this.gantt_start,
+                    gantt_end: this.gantt_end,
+                });
+                this.config.custom_marker_date = new Date(this.gantt_start);
+            }
+
+            this.clear();
+            this.setup_layers();
+            this.make_grid();
+            this.make_dates();
+            this.make_grid_extras();
+            this.make_bars();
+            this.make_arrows();
+            this.map_arrows_on_bars();
+            this.set_dimensions();
+            this.set_scroll_position(this.options.scroll_to);
+        } catch (error) {
+            console.error('Error during render:', error);
+        }
     }
 
     setup_layers() {
@@ -832,6 +861,7 @@ export default class Gantt {
             createSVG('rect', {
                 x: diff * this.config.column_width,
                 y: this.config.header_height,
+
                 width: this.config.column_width,
                 height: height,
                 class: 'ignored-bar',
@@ -1506,44 +1536,62 @@ export default class Gantt {
     }
 
     handle_animation_end() {
-        if (this.options.player_loop) {
-            // Reset to initial date and continue
-            this.config.custom_marker_date = new Date(
-                this.options.custom_marker_init_date,
-            );
-            this.overlapping_tasks.clear();
-            this.render();
-            this.player_update();
-        } else {
-            // Stop player
-            this.options.player_state = false;
-            this.overlapping_tasks.clear();
-            clearInterval(this.player_interval);
-
-            // Update button
-            if (this.options.player_use_fa) {
-                this.$player_button.classList.remove('fa-pause');
-                this.$player_button.classList.add('fa-play');
+        try {
+            if (this.options.player_loop) {
+                // Reset to initial date and continue
+                this.config.custom_marker_date = new Date(
+                    this.options.custom_marker_init_date,
+                );
+                this.overlapping_tasks.clear();
+                this.render();
+                this.player_update();
             } else {
-                this.$player_button.textContent = 'Play';
-            }
+                // Stop player
+                this.options.player_state = false;
+                this.overlapping_tasks.clear();
+                clearInterval(this.player_interval);
 
-            // Show custom highlight, remove animated highlight
-            if (this.$custom_highlight)
-                this.$custom_highlight.style.display = 'block';
-            if (this.$custom_ball_highlight)
-                this.$custom_ball_highlight.style.display = 'block';
-            if (this.$animated_highlight) {
-                this.$animated_highlight.remove();
-                this.$animated_highlight = null;
-            }
-            if (this.$animated_ball_highlight) {
-                this.$animated_ball_highlight.remove();
-                this.$animated_ball_highlight = null;
-            }
+                // Update button
+                if (this.$player_button) {
+                    if (this.options.player_use_fa) {
+                        this.$player_button.classList.remove('fa-pause');
+                        this.$player_button.classList.add('fa-play');
+                    } else {
+                        this.$player_button.textContent = 'Play';
+                    }
+                }
 
-            this.render();
-            this.trigger_event('finish', []);
+                // Safely manage highlights
+                if (this.$animated_highlight) {
+                    this.$animated_highlight.remove();
+                    this.$animated_highlight = null;
+                }
+                if (this.$animated_ball_highlight) {
+                    this.$animated_ball_highlight.remove();
+                    this.$animated_ball_highlight = null;
+                }
+
+                // Ensure custom highlight is at the correct position
+                if (
+                    this.config.custom_marker_date &&
+                    this.gantt_start &&
+                    this.gantt_end
+                ) {
+                    this.highlight_custom(this.config.custom_marker_date);
+                    if (this.$custom_highlight) {
+                        this.$custom_highlight.style.display = 'block';
+                    }
+                    if (this.$custom_ball_highlight) {
+                        this.$custom_ball_highlight.style.display = 'block';
+                    }
+                }
+
+                // Re-render to update chart
+                this.render();
+                this.trigger_event('finish', []);
+            }
+        } catch (error) {
+            console.error('Error in handle_animation_end:', error);
         }
     }
 
