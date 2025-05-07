@@ -1,3 +1,5 @@
+@import './light.css';
+
 .gantt-container {
     line-height: 14.5px;
     position: relative;
@@ -122,6 +124,7 @@
         top: 0;
         right: 0;
         float: right;
+
         z-index: 1000;
         line-height: 20px;
         font-weight: 400;
@@ -146,6 +149,7 @@
         letter-spacing: 0.02em;
         font-weight: 420;
         box-sizing: content-box;
+
         margin-right: 5px;
 
         &:last-child {
@@ -162,7 +166,6 @@
         padding-top: 2px;
         padding-bottom: 2px;
     }
-
     & .side-header select:focus {
         outline: none;
     }
@@ -179,82 +182,28 @@
         position: absolute;
         background: var(--g-today-highlight);
         width: 1px;
-        height: calc(
-            var(--gv-grid-height) - var(--gv-lower-header-height) -
-                var(--gv-upper-header-height) - 10px
-        );
         z-index: 999;
-        opacity: 0.8;
     }
 
     & .current-ball-highlight {
         position: absolute;
         background: var(--g-today-highlight);
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
         z-index: 1001;
-        opacity: 0.8;
+        border-radius: 50%;
     }
 
     & .custom-highlight {
         position: absolute;
         background: var(--g-custom-highlight);
-        width: 2px;
-        height: calc(
-            var(--gv-grid-height) - var(--gv-lower-header-height) -
-                var(--gv-upper-header-height) - 10px
-        );
+        width: 1px;
         z-index: 999;
-        opacity: 0.8;
-        transition: left 0.1s ease;
     }
 
     & .custom-ball-highlight {
         position: absolute;
         background: var(--g-custom-highlight);
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
         z-index: 1001;
-        opacity: 0.8;
-        transition: left 0.1s ease;
-    }
-
-    & .animated-highlight {
-        position: absolute;
-        background: var(--g-custom-highlight);
-        width: 2px;
-        height: calc(
-            var(--gv-grid-height) - var(--gv-lower-header-height) -
-                var(--gv-upper-header-height) - 10px
-        );
-        z-index: 999;
-        opacity: 0.8;
-        animation: moveRight var(--animation-duration, 1s) linear forwards;
-        transform-origin: left;
-    }
-
-    & .animated-ball-highlight {
-        position: absolute;
-        background: var(--g-custom-highlight);
-        width: 6px;
-        height: 6px;
         border-radius: 50%;
-        z-index: 1001;
-        opacity: 0.8;
-        animation: moveRight var(--animation-duration, 1s) linear forwards;
-        transform-origin: center;
-    }
-
-    /* Animation keyframes for smooth movement */
-    @keyframes moveRight {
-        0% {
-            transform: translateX(0);
-        }
-        100% {
-            transform: translateX(var(--move-distance));
-        }
     }
 
     & .current-date-highlight {
@@ -269,7 +218,7 @@
         left: 0;
         opacity: 0;
         z-index: 1000;
-        background: var(--g-weekend-label-color);
+        background: --g-weekend-label-color;
         border-radius: 5px;
         padding: 2px 5px;
 
@@ -376,7 +325,6 @@
         fill: var(--g-handle-color);
         opacity: 0;
         transition: opacity 0.3s ease;
-
         &.active,
         &.visible {
             cursor: ew-resize;

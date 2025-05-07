@@ -763,7 +763,17 @@ export default class Gantt {
     }
 
     play_animated_highlight(left, dateObj) {
-        if (!left || !dateObj) return null;
+        if (!left || !dateObj) {
+            console.warn('Invalid left or dateObj:', { left, dateObj });
+            return null;
+        }
+
+        console.log(
+            'play_animated_highlight called with left:',
+            left,
+            'dateObj:',
+            dateObj,
+        );
 
         // Create animated highlight bar if not exists
         if (!this.$animated_highlight) {
@@ -784,7 +794,7 @@ export default class Gantt {
         if (!this.$animated_ball_highlight) {
             this.$animated_ball_highlight = this.create_el({
                 top: this.config.header_height - 6,
-                left: left - 2.5,
+                left: left - 2, // Adjusted to center ball on bar (2px bar width / 2)
                 width: 6,
                 height: 6,
                 classes: 'animated-ball-highlight',
@@ -792,7 +802,7 @@ export default class Gantt {
                 style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
             });
         } else {
-            this.$animated_ball_highlight.style.left = `${left - 2.5}px`;
+            this.$animated_ball_highlight.style.left = `${left - 2}px`;
         }
 
         // Calculate animation duration
@@ -807,6 +817,8 @@ export default class Gantt {
                     `${animationDuration}s`,
                 );
                 el.style.setProperty('--move-distance', `${moveDistance}px`);
+                el.style.animation = `none`; // Reset animation
+                el.offsetHeight; // Trigger reflow
                 el.style.animation = `moveRight ${animationDuration}s linear forwards`;
                 el.style.animationPlayState = 'running';
             },
