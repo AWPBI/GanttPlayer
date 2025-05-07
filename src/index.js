@@ -788,7 +788,7 @@ export default class Gantt {
         return { left, dateObj };
     }
 
-    play_animated_highlight(left, dateObj) {
+    ani_highlight(left, dateObj) {
         if (!left || !dateObj) return null;
         this.$animated_highlight = this.create_el({
             top: this.config.header_height,
@@ -880,7 +880,7 @@ export default class Gantt {
         if (!highlightDimensions || !highlightDimensionsCustom) return;
         if (this.options.player_state) {
             try {
-                this.play_animated_highlight(
+                this.ani_highlight(
                     highlightDimensionsCustom.left,
                     highlightDimensionsCustom.dateObj,
                 );
