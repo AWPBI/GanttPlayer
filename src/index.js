@@ -726,41 +726,41 @@ export default class Gantt {
         return { left, dateObj };
     }
 
-    highlight_custom(date) {
-        const res = this.get_closest_date_to(date);
-        if (!res) return null;
+    // highlight_custom(date) {
+    //     const res = this.get_closest_date_to(date);
+    //     if (!res) return null;
 
-        const [_, el] = res;
-        el.classList.add('custom-date-highlight');
+    //     const [_, el] = res;
+    //     el.classList.add('custom-date-highlight');
 
-        const dateObj = date;
+    //     const dateObj = date;
 
-        const diff_in_units = date_utils.diff(
-            dateObj,
-            this.gantt_start,
-            this.config.unit,
-        );
+    //     const diff_in_units = date_utils.diff(
+    //         dateObj,
+    //         this.gantt_start,
+    //         this.config.unit,
+    //     );
 
-        const left =
-            (diff_in_units / this.config.step) * this.config.column_width;
+    //     const left =
+    //         (diff_in_units / this.config.step) * this.config.column_width;
 
-        this.$custom_highlight = this.create_el({
-            top: this.config.header_height,
-            left,
-            height: this.grid_height - this.config.header_height,
-            classes: 'custom-highlight',
-            append_to: this.$container,
-        });
-        this.$custom_ball_highlight = this.create_el({
-            top: this.config.header_height - 6,
-            left: left - 2.5,
-            width: 6,
-            height: 6,
-            classes: 'custom-ball-highlight',
-            append_to: this.$header,
-        });
-        return { left, dateObj };
-    }
+    //     this.$custom_highlight = this.create_el({
+    //         top: this.config.header_height,
+    //         left,
+    //         height: this.grid_height - this.config.header_height,
+    //         classes: 'custom-highlight',
+    //         append_to: this.$container,
+    //     });
+    //     this.$custom_ball_highlight = this.create_el({
+    //         top: this.config.header_height - 6,
+    //         left: left - 2.5,
+    //         width: 6,
+    //         height: 6,
+    //         classes: 'custom-ball-highlight',
+    //         append_to: this.$header,
+    //     });
+    //     return { left, dateObj };
+    // }
 
     play_animated_highlight(left, dateObj) {
         const attemptHighlight = (retryCount = 0, maxRetries = 5) => {
@@ -1532,18 +1532,18 @@ export default class Gantt {
         }
     }
 
-    // highlight_custom(date) {
-    //     console.log('highlight_custom called with date:', date, {
-    //         gantt_start: this.gantt_start,
-    //         unit: this.config.unit,
-    //         step: this.config.step,
-    //         column_width: this.config.column_width,
-    //     });
-    //     const diff = date_utils.diff(date, this.gantt_start, this.config.unit);
-    //     const left = (diff / this.config.step) * this.config.column_width;
-    //     console.log('highlight_custom result:', { diff, left });
-    //     return { left, dateObj: date };
-    // }
+    highlight_custom(date) {
+        console.log('highlight_custom called with date:', date, {
+            gantt_start: this.gantt_start,
+            unit: this.config.unit,
+            step: this.config.step,
+            column_width: this.config.column_width,
+        });
+        const diff = date_utils.diff(date, this.gantt_start, this.config.unit);
+        const left = (diff / this.config.step) * this.config.column_width;
+        console.log('highlight_custom result:', { diff, left });
+        return { left, dateObj: date };
+    }
 
     reset_play() {
         this.config.custom_marker_date = new Date(
