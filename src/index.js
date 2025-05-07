@@ -818,6 +818,11 @@ export default class Gantt {
         this.$animated_highlight.style.animationIterationCount = 'infinite';
         this.$animated_ball_highlight.style.animationIterationCount =
             'infinite';
+
+        return {
+            left,
+            dateObj,
+        };
     }
 
     make_grid_highlights() {
