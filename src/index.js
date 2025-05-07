@@ -769,20 +769,29 @@ export default class Gantt {
         const customHighlight =
             this.$container.querySelector('.custom-highlight');
 
+        const diff_in_units = date_utils.diff(
+            dateObj,
+            this.gantt_start,
+            this.config.unit,
+        );
+
+        const leftTest =
+            (diff_in_units / this.config.step) * this.config.column_width;
+
         if (!dateObj || isNaN(left) || left === 0) {
             if (customHighlight) {
                 adjustedLeft = parseFloat(customHighlight.style.left) || 0;
                 console.log('Using custom-highlight left:', adjustedLeft);
             } else {
                 // Fallback to calculated left
-                adjustedLeft =
-                    (date_utils.diff(
-                        this.config.custom_marker_date,
-                        this.gantt_start,
-                        this.config.unit,
-                    ) /
-                        this.config.step) *
-                    this.config.column_width;
+                adjustedLeft = leftTest;
+                // (date_utils.diff(
+                //     this.config.custom_marker_date,
+                //     this.gantt_start,
+                //     this.config.unit,
+                // ) /
+                //     this.config.step) *
+                // this.config.column_width;
                 console.log('Using calculated left:', adjustedLeft);
             }
             adjustedDateObj = this.config.custom_marker_date || new Date();
@@ -1328,38 +1337,60 @@ export default class Gantt {
     }
 
     toggle_play() {
-        if (!this.config.custom_marker_date) {
-            console.warn(
-                'custom_marker_date not set, using default:',
-                this.config.custom_marker_init_date || new Date(),
+        this.options.player_state = !this.options.player_state;
+        if (this.options.player_state) {
+            // Start player interval
+            this.player_interval = setInterval(
+                this.player_update.bind(this),
+                this.options.player_interval || 1000,
             );
-            this.config.custom_marker_date =
-                this.config.custom_marker_init_date || new Date();
-        }
-        console.log(
-            'toggle_play custom_marker_date:',
-            this.config.custom_marker_date,
-        );
+            this.trigger_event('start', []);
 
-        if (!this.player_timer) {
-            this.player_timer = setInterval(
-                () => this.player_update(),
-                this.options.player_interval,
-            );
-            const highlight_data = this.highlight_custom(
+            // Update button
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-play');
+                this.$player_button.classList.add('fa-pause');
+            } else {
+                this.$player_button.textContent = 'Pause';
+            }
+
+            // Hide custom highlight, show animated highlight
+            if (this.$custom_highlight)
+                this.$custom_highlight.style.display = 'none';
+            if (this.$custom_ball_highlight)
+                this.$custom_ball_highlight.style.display = 'none';
+            const highlightDimensions = this.highlight_custom(
                 this.config.custom_marker_date,
             );
-            console.log('toggle_play highlight_data:', highlight_data);
-            this.play_animated_highlight(
-                highlight_data.left,
-                highlight_data.dateObj,
-            );
-            this.$.play_btn.innerHTML = this.options.icons.pause;
+            if (highlightDimensions) {
+                this.play_animated_highlight(
+                    highlightDimensions.left,
+                    highlightDimensions.dateObj,
+                );
+            }
         } else {
-            clearInterval(this.player_timer);
-            this.player_timer = null;
-            this.reset_play();
-            this.$.play_btn.innerHTML = this.options.icons.play;
+            // Stop player interval
+            clearInterval(this.player_interval);
+            this.trigger_event('pause', []);
+
+            // Update button
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-pause');
+                this.$player_button.classList.add('fa-play');
+            } else {
+                this.$player_button.textContent = 'Play';
+            }
+
+            // Pause animation, show custom highlight
+            if (this.$animated_highlight)
+                this.$animated_highlight.style.animationPlayState = 'paused';
+            if (this.$animated_ball_highlight)
+                this.$animated_ball_highlight.style.animationPlayState =
+                    'paused';
+            if (this.$custom_highlight)
+                this.$custom_highlight.style.display = 'block';
+            if (this.$custom_ball_highlight)
+                this.$custom_ball_highlight.style.display = 'block';
         }
     }
 
