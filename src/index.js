@@ -788,11 +788,44 @@ export default class Gantt {
         return { left, dateObj };
     }
 
+    play_animated_highlight(left, dateObj) {
+        if (!left || !dateObj) return;
+        this.$animated_highlight = this.create_el({
+            top: this.config.header_height,
+            left,
+            height: this.grid_height - this.config.header_height,
+            classes: 'animated-highlight',
+            append_to: this.$container,
+            style: 'fill: #ff0000;',
+        });
+        this.$animated_ball_highlight = this.create_el({
+            top: this.config.header_height - 6,
+            left: left - 2.5,
+            width: 6,
+            height: 6,
+            classes: 'animated-ball-highlight',
+            append_to: this.$header,
+            style: 'fill: #ff0000;',
+        });
+        this.$animated_highlight.style.animation =
+            'highlight 1s linear infinite';
+        this.$animated_ball_highlight.style.animation =
+            'highlight 1s linear infinite';
+        this.$animated_highlight.style.animationPlayState = 'running';
+        this.$animated_ball_highlight.style.animationPlayState = 'running';
+        this.$animated_highlight.style.animationDirection = 'normal';
+        this.$animated_ball_highlight.style.animationDirection = 'normal';
+        this.$animated_highlight.style.animationIterationCount = 'infinite';
+        this.$animated_ball_highlight.style.animationIterationCount =
+            'infinite';
+
+        return {
+            left,
+            dateObj,
+        };
+    }
+
     make_grid_highlights() {
-        console.log(
-            'this.play_animated_highlight:',
-            this.play_animated_highlight,
-        );
         this.highlight_holidays();
         this.config.ignored_positions = [];
 
@@ -855,43 +888,6 @@ export default class Gantt {
             }
         }
         if (!highlightDimensions || !highlightDimensionsCustom) return;
-    }
-
-    play_animated_highlight(left, dateObj) {
-        if (!left || !dateObj) return;
-        this.$animated_highlight = this.create_el({
-            top: this.config.header_height,
-            left,
-            height: this.grid_height - this.config.header_height,
-            classes: 'animated-highlight',
-            append_to: this.$container,
-            style: 'fill: #ff0000;',
-        });
-        this.$animated_ball_highlight = this.create_el({
-            top: this.config.header_height - 6,
-            left: left - 2.5,
-            width: 6,
-            height: 6,
-            classes: 'animated-ball-highlight',
-            append_to: this.$header,
-            style: 'fill: #ff0000;',
-        });
-        this.$animated_highlight.style.animation =
-            'highlight 1s linear infinite';
-        this.$animated_ball_highlight.style.animation =
-            'highlight 1s linear infinite';
-        this.$animated_highlight.style.animationPlayState = 'running';
-        this.$animated_ball_highlight.style.animationPlayState = 'running';
-        this.$animated_highlight.style.animationDirection = 'normal';
-        this.$animated_ball_highlight.style.animationDirection = 'normal';
-        this.$animated_highlight.style.animationIterationCount = 'infinite';
-        this.$animated_ball_highlight.style.animationIterationCount =
-            'infinite';
-
-        return {
-            left,
-            dateObj,
-        };
     }
 
     create_el({ left, top, width, height, id, classes, append_to, type }) {
@@ -1854,6 +1850,8 @@ export default class Gantt {
         this.$custom_highlight?.remove?.();
         this.$current_ball_highlight?.remove?.();
         this.$custom_ball_highlight?.remove?.();
+        this.$animated_highlight?.remove?.();
+        this.$animated_ball_highlight?.remove?.();
         this.$extras?.remove?.();
         this.popup?.hide?.();
     }
