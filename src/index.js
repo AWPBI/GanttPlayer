@@ -788,7 +788,7 @@ export default class Gantt {
         return { left, dateObj };
     }
 
-    ani_highlight(left, dateObj) {
+    play_animated_highlight(left, dateObj) {
         if (!left || !dateObj) return null;
         this.$animated_highlight = this.create_el({
             top: this.config.header_height,
@@ -807,10 +807,11 @@ export default class Gantt {
             append_to: this.$header,
             style: 'fill: #ff0000;',
         });
-        this.$animated_highlight.style.animation =
-            'highlight 1s linear infinite';
-        this.$animated_ball_highlight.style.animation =
-            'highlight 1s linear infinite';
+
+        // Apply the moveRight animation, moving by column_width
+        const animationStyle = `moveRight 1s linear infinite`;
+        this.$animated_highlight.style.animation = animationStyle;
+        this.$animated_ball_highlight.style.animation = animationStyle;
         this.$animated_highlight.style.animationPlayState = 'running';
         this.$animated_ball_highlight.style.animationPlayState = 'running';
         this.$animated_highlight.style.animationDirection = 'normal';
@@ -819,11 +820,36 @@ export default class Gantt {
         this.$animated_ball_highlight.style.animationIterationCount =
             'infinite';
 
+        // Set the column width as a CSS variable for the animation
+        this.$animated_highlight.style.setProperty(
+            '--move-distance',
+            `${this.config.column_width}px`,
+        );
+        this.$animated_ball_highlight.style.setProperty(
+            '--move-distance',
+            `${this.config.column_width}px`,
+        );
+
         return {
             left,
             dateObj,
         };
     }
+
+    styles = `
+@keyframes moveRight {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(var(--move-distance));
+    }
+}
+
+.animated-highlight, .animated-ball-highlight {
+    position: absolute;
+}
+`;
 
     make_grid_highlights() {
         this.highlight_holidays();
@@ -880,8 +906,7 @@ export default class Gantt {
         if (!highlightDimensions || !highlightDimensionsCustom) return;
         if (this.options.player_state) {
             try {
-                const aniHighlight = this.ani_highlight.bind(this);
-                aniHighlight(
+                this.play_animated_highlight(
                     highlightDimensionsCustom.left,
                     highlightDimensionsCustom.dateObj,
                 );
