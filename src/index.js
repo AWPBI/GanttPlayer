@@ -381,7 +381,7 @@ export default class Gantt {
             append_to: this.$extras,
             type: 'button',
         });
-        this.$adjust.innerHTML = '&larr;';
+        this.$adjust.innerHTML = '←';
     }
 
     make_grid() {
@@ -764,14 +764,24 @@ export default class Gantt {
 
     play_animated_highlight(left, dateObj) {
         if (!left || !dateObj) return null;
+
+        // Remove any existing animated highlights
+        if (this.$animated_highlight) this.$animated_highlight.remove();
+        if (this.$animated_ball_highlight)
+            this.$animated_ball_highlight.remove();
+
+        // Create animated highlight bar
         this.$animated_highlight = this.create_el({
             top: this.config.header_height,
-            left,
+            left: left,
+            width: 2, // Thin vertical line
             height: this.grid_height - this.config.header_height,
             classes: 'animated-highlight',
             append_to: this.$container,
-            style: 'background: #ff0000;',
+            style: 'background: #ff0000; z-index: 10;',
         });
+
+        // Create animated highlight ball
         this.$animated_ball_highlight = this.create_el({
             top: this.config.header_height - 6,
             left: left - 2.5,
@@ -779,16 +789,20 @@ export default class Gantt {
             height: 6,
             classes: 'animated-ball-highlight',
             append_to: this.$header,
-            style: 'background: #ff0000;',
+            style: 'background: #ff0000; border-radius: 50%; z-index: 10;',
         });
 
+        // Calculate animation duration based on player_interval
         const animationDuration = this.options.player_interval / 1000; // Convert ms to seconds
         const animationStyle = `moveRight ${animationDuration}s linear infinite`;
+
+        // Apply animation
         this.$animated_highlight.style.animation = animationStyle;
         this.$animated_ball_highlight.style.animation = animationStyle;
         this.$animated_highlight.style.animationPlayState = 'running';
         this.$animated_ball_highlight.style.animationPlayState = 'running';
 
+        // Set the movement distance
         this.$animated_highlight.style.setProperty(
             '--move-distance',
             `${this.config.column_width}px`,
@@ -803,25 +817,6 @@ export default class Gantt {
             dateObj,
         };
     }
-
-    styles = `
-@keyframes moveRight {
-    0% {
-        transform: translateX(0);
-    }
-    100% {
-        transform: translateX(var(--move-distance));
-    }
-}
-
-.animated-highlight, .animated-ball-highlight {
-    position: absolute;
-}
-
-.custom-highlight, .custom-ball-highlight {
-    display: none;
-}
-`;
 
     make_grid_highlights() {
         this.highlight_holidays();
@@ -876,6 +871,8 @@ export default class Gantt {
             );
         }
         if (!highlightDimensions || !highlightDimensionsCustom) return;
+
+        // Toggle highlights based on player state
         if (this.options.player_state) {
             try {
                 this.play_animated_highlight(
@@ -1586,7 +1583,7 @@ export default class Gantt {
                 this.get_start_end_positions();
 
             if (x_on_scroll_start > max_end + 100) {
-                this.$adjust.innerHTML = '&larr;';
+                this.$adjust.innerHTML = '←';
                 this.$adjust.classList.remove('hide');
                 this.$adjust.onclick = () => {
                     this.$container.scrollTo({
@@ -1598,7 +1595,7 @@ export default class Gantt {
                 x_on_scroll_start + e.currentTarget.offsetWidth <
                 min_start - 100
             ) {
-                this.$adjust.innerHTML = '&rarr;';
+                this.$adjust.innerHTML = '→';
                 this.$adjust.classList.remove('hide');
                 this.$adjust.onclick = () => {
                     this.$container.scrollTo({
@@ -1851,6 +1848,7 @@ export default class Gantt {
             return task.id === id;
         });
     }
+
     get_bar(id) {
         return this.bars.find((bar) => {
             return bar.task.id === id;
