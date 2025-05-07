@@ -17,6 +17,10 @@ export default class Gantt {
         this.overlapping_tasks = new Set();
         this.change_view_mode();
         this.bind_events();
+        // Initialize custom highlight on load
+        if (this.options.custom_marker) {
+            this.init_custom_highlight();
+        }
     }
 
     setup_wrapper(element) {
@@ -726,62 +730,206 @@ export default class Gantt {
         return { left, dateObj };
     }
 
-    // highlight_custom(date) {
-    //     const res = this.get_closest_date_to(date);
-    //     if (!res) return null;
+    highlight_custom(date) {
+        console.log('highlight_custom called with date:', date, {
+            gantt_start: this.gantt_start,
+            unit: this.config.unit,
+            step: this.config.step,
+            column_width: this.config.column_width,
+        });
+        if (!date || !this.gantt_start || !this.config.unit) {
+            console.error('Invalid inputs for highlight_custom:', {
+                date,
+                gantt_start: this.gantt_start,
+                unit: this.config.unit,
+            });
+            return { left: 0, dateObj: date };
+        }
+        const diff = date_utils.diff(date, this.gantt_start, this.config.unit);
+        const left = (diff / this.config.step) * this.config.column_width;
+        console.log('highlight_custom result:', { diff, left });
 
-    //     const [_, el] = res;
-    //     el.classList.add('custom-date-highlight');
+        // Get grid height
+        let gridHeight = 1152; // Default to correct height
+        const gridElement = this.$svg.querySelector('.grid');
+        if (gridElement) {
+            gridHeight = gridElement.getBoundingClientRect().height;
+            console.log('Grid element height:', gridHeight);
+        } else {
+            console.warn(
+                'Grid element not found, using default height:',
+                gridHeight,
+            );
+        }
 
-    //     const dateObj = date;
+        // Create or update custom highlight
+        if (!this.$custom_highlight) {
+            this.$custom_highlight = this.create_el({
+                top: this.config.header_height,
+                left,
+                width: 2,
+                height: gridHeight,
+                classes: 'custom-highlight',
+                append_to: this.$container,
+                style: 'background: var(--g-custom-highlight); z-index: 999; display: block;',
+            });
+        } else {
+            this.$custom_highlight.style.left = `${left}px`;
+            this.$custom_highlight.style.height = `${gridHeight}px`;
+            this.$custom_highlight.style.display = 'block';
+        }
 
-    //     const diff_in_units = date_utils.diff(
-    //         dateObj,
-    //         this.gantt_start,
-    //         this.config.unit,
-    //     );
+        // Create or update custom ball highlight
+        if (!this.$custom_ball_highlight) {
+            this.$custom_ball_highlight = this.create_el({
+                top: this.config.header_height - 6,
+                left: left - 2,
+                width: 6,
+                height: 6,
+                classes: 'custom-ball-highlight',
+                append_to: this.$header,
+                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001; display: block;',
+            });
+        } else {
+            this.$custom_ball_highlight.style.left = `${left - 2}px`;
+            this.$custom_ball_highlight.style.display = 'block';
+        }
 
-    //     const left =
-    //         (diff_in_units / this.config.step) * this.config.column_width;
+        return { left, dateObj: date };
+    }
 
-    //     this.$custom_highlight = this.create_el({
-    //         top: this.config.header_height,
-    //         left,
-    //         height: this.grid_height - this.config.header_height,
-    //         classes: 'custom-highlight',
-    //         append_to: this.$container,
-    //     });
-    //     this.$custom_ball_highlight = this.create_el({
-    //         top: this.config.header_height - 6,
-    //         left: left - 2.5,
-    //         width: 6,
-    //         height: 6,
-    //         classes: 'custom-ball-highlight',
-    //         append_to: this.$header,
-    //     });
-    //     return { left, dateObj };
-    // }
+    init_custom_highlight() {
+        if (!this.options.custom_marker) {
+            console.warn(
+                'custom_marker option not enabled, skipping init_custom_highlight',
+            );
+            return;
+        }
+
+        if (!this.config.custom_marker_date) {
+            console.warn(
+                'custom_marker_date not set, using custom_marker_init_date:',
+                this.config.custom_marker_init_date || new Date(),
+            );
+            this.config.custom_marker_date =
+                this.config.custom_marker_init_date || new Date();
+        }
+
+        const highlightDimensions = this.highlight_custom(
+            this.config.custom_marker_date,
+        );
+        console.log('init_custom_highlight dimensions:', highlightDimensions);
+
+        if (!highlightDimensions || isNaN(highlightDimensions.left)) {
+            console.error(
+                'Invalid highlightDimensions for init_custom_highlight, retrying in 100ms',
+            );
+            setTimeout(() => this.init_custom_highlight(), 100);
+            return;
+        }
+    }
+
+    make_grid_highlights() {
+        this.highlight_holidays();
+        this.config.ignored_positions = [];
+
+        const height =
+            (this.options.bar_height + this.options.padding) *
+            this.tasks.length;
+        this.layers.grid.innerHTML += `<pattern id="diagonalHatch" patternUnits="userSpaceOnUse" width="4" height="4">
+          <path d="M-1,1 l2,-2
+                   M0,4 l4,-4
+                   M3,5 l2,-2"
+                style="stroke:grey; stroke-width:0.3" />
+        </pattern>`;
+
+        for (
+            let d = new Date(this.gantt_start);
+            d <= this.gantt_end;
+            d.setDate(d.getDate() + 1)
+        ) {
+            if (
+                !this.config.ignored_dates.find(
+                    (k) => k.getTime() == d.getTime(),
+                ) &&
+                (!this.config.ignored_function ||
+                    !this.config.ignored_function(d))
+            )
+                continue;
+            let diff =
+                date_utils.convert_scales(
+                    date_utils.diff(d, this.gantt_start) + 'd',
+                    this.config.unit,
+                ) / this.config.step;
+
+            this.config.ignored_positions.push(diff * this.config.column_width);
+            createSVG('rect', {
+                x: diff * this.config.column_width,
+                y: this.config.header_height,
+                width: this.config.column_width,
+                height: height,
+                class: 'ignored-bar',
+                style: 'fill: url(#diagonalHatch);',
+                append_to: this.$svg,
+            });
+        }
+
+        const highlightDimensions = this.highlight_current();
+        let highlightDimensionsCustom;
+        if (this.options.custom_marker) {
+            highlightDimensionsCustom = this.highlight_custom(
+                this.config.custom_marker_date,
+            );
+        }
+        if (!highlightDimensions || !highlightDimensionsCustom) return;
+
+        // Toggle highlights based on player state
+        if (this.options.player_state) {
+            try {
+                // Delay to ensure custom highlight is rendered
+                setTimeout(() => {
+                    this.play_animated_highlight(
+                        highlightDimensionsCustom.left,
+                        highlightDimensionsCustom.dateObj,
+                    );
+                    // Hide custom highlight when playing
+                    if (this.$custom_highlight)
+                        this.$custom_highlight.style.display = 'none';
+                    if (this.$custom_ball_highlight)
+                        this.$custom_ball_highlight.style.display = 'none';
+                }, 100);
+            } catch (e) {
+                console.error('Error playing animated highlight:', e);
+            }
+        }
+    }
 
     play_animated_highlight(left, dateObj) {
-        const attemptHighlight = (retryCount = 0, maxRetries = 5) => {
+        const attemptHighlight = (retryCount = 0, maxRetries = 10) => {
             const customHighlight =
                 this.$container.querySelector('.custom-highlight');
 
             if (!customHighlight && retryCount < maxRetries) {
                 console.warn(
-                    `custom-highlight not found, retrying (${retryCount + 1}/${maxRetries}) in 100ms`,
+                    `custom-highlight not found, retrying (${retryCount + 1}/${maxRetries}) in 200ms`,
                 );
                 setTimeout(
                     () => attemptHighlight(retryCount + 1, maxRetries),
-                    100,
+                    200,
                 );
                 return;
             }
 
             if (!customHighlight) {
                 console.error(
-                    'custom-highlight not found after max retries, proceeding with fallback',
+                    'custom-highlight not found after max retries, recalculating left',
                 );
+                // Recalculate left as fallback
+                const highlightDimensions = this.highlight_custom(
+                    this.config.custom_marker_date || new Date(),
+                );
+                left = highlightDimensions.left || 0;
+                dateObj = highlightDimensions.dateObj || new Date();
             }
 
             // Validate and adjust left position
@@ -868,7 +1016,7 @@ export default class Gantt {
             if (!this.$animated_ball_highlight) {
                 this.$animated_ball_highlight = this.create_el({
                     top: this.config.header_height - 6,
-                    left: adjustedLeft - 2, // Center on 2px bar
+                    left: adjustedLeft - 2,
                     width: 6,
                     height: 6,
                     classes: 'animated-ball-highlight',
@@ -881,7 +1029,7 @@ export default class Gantt {
 
             // Calculate animation duration
             const animationDuration =
-                (this.options.player_interval || 1000) / 1000; // Convert ms to seconds, default 1s
+                (this.options.player_interval || 1000) / 1000;
             const moveDistance = this.config.column_width;
 
             // Apply animation properties
@@ -895,8 +1043,8 @@ export default class Gantt {
                         '--move-distance',
                         `${moveDistance}px`,
                     );
-                    el.style.animation = `none`; // Reset animation
-                    el.offsetHeight; // Trigger reflow
+                    el.style.animation = `none`;
+                    el.offsetHeight;
                     el.style.animation = `moveRight ${animationDuration}s linear forwards`;
                     el.style.animationPlayState = 'running';
                 },
@@ -908,160 +1056,149 @@ export default class Gantt {
             };
         };
 
-        // Initial attempt
         return attemptHighlight();
     }
 
-    init_custom_highlight() {
+    toggle_play() {
         if (!this.config.custom_marker_date) {
             console.warn(
-                'custom_marker_date not set, using custom_marker_init_date:',
+                'custom_marker_date not set, using default:',
                 this.config.custom_marker_init_date || new Date(),
             );
             this.config.custom_marker_date =
                 this.config.custom_marker_init_date || new Date();
         }
-
-        const highlightDimensions = this.highlight_custom(
+        console.log(
+            'toggle_play custom_marker_date:',
             this.config.custom_marker_date,
         );
-        console.log('init_custom_highlight dimensions:', highlightDimensions);
 
-        if (!highlightDimensions || isNaN(highlightDimensions.left)) {
-            console.error(
-                'Invalid highlightDimensions for init_custom_highlight, retrying in 100ms',
-            );
-            setTimeout(() => this.init_custom_highlight(), 100);
-            return;
-        }
-
-        // Get grid height
-        let gridHeight = 1152; // Default to correct height
-        const gridElement = this.$svg.querySelector('.grid');
-        if (gridElement) {
-            gridHeight = gridElement.getBoundingClientRect().height;
-            console.log('Grid element height:', gridHeight);
-        } else {
-            console.warn(
-                'Grid element not found, using default height:',
-                gridHeight,
-            );
-        }
-
-        // Create or update custom highlight
-        if (!this.$custom_highlight) {
-            this.$custom_highlight = this.create_el({
-                top: this.config.header_height,
-                left: highlightDimensions.left,
-                width: 2,
-                height: gridHeight,
-                classes: 'custom-highlight',
-                append_to: this.$container,
-                style: 'background: var(--g-custom-highlight); z-index: 999; display: block;',
-            });
-        } else {
-            this.$custom_highlight.style.left = `${highlightDimensions.left}px`;
-            this.$custom_highlight.style.height = `${gridHeight}px`;
-            this.$custom_highlight.style.display = 'block';
-        }
-
-        // Create or update custom ball highlight
-        if (!this.$custom_ball_highlight) {
-            this.$custom_ball_highlight = this.create_el({
-                top: this.config.header_height - 6,
-                left: highlightDimensions.left - 2,
-                width: 6,
-                height: 6,
-                classes: 'custom-ball-highlight',
-                append_to: this.$header,
-                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001; display: block;',
-            });
-        } else {
-            this.$custom_ball_highlight.style.left = `${highlightDimensions.left - 2}px`;
-            this.$custom_ball_highlight.style.display = 'block';
-        }
-    }
-
-    make_grid_highlights() {
-        this.highlight_holidays();
-        this.config.ignored_positions = [];
-
-        const height =
-            (this.options.bar_height + this.options.padding) *
-            this.tasks.length;
-        this.layers.grid.innerHTML += `<pattern id="diagonalHatch" patternUnits="userSpaceOnUse" width="4" height="4">
-          <path d="M-1,1 l2,-2
-                   M0,4 l4,-4
-                   M3,5 l2,-2"
-                style="stroke:grey; stroke-width:0.3" />
-        </pattern>`;
-
-        for (
-            let d = new Date(this.gantt_start);
-            d <= this.gantt_end;
-            d.setDate(d.getDate() + 1)
-        ) {
-            if (
-                !this.config.ignored_dates.find(
-                    (k) => k.getTime() == d.getTime(),
-                ) &&
-                (!this.config.ignored_function ||
-                    !this.config.ignored_function(d))
-            )
-                continue;
-            let diff =
-                date_utils.convert_scales(
-                    date_utils.diff(d, this.gantt_start) + 'd',
-                    this.config.unit,
-                ) / this.config.step;
-
-            this.config.ignored_positions.push(diff * this.config.column_width);
-            createSVG('rect', {
-                x: diff * this.config.column_width,
-                y: this.config.header_height,
-                width: this.config.column_width,
-                height: height,
-                class: 'ignored-bar',
-                style: 'fill: url(#diagonalHatch);',
-                append_to: this.$svg,
-            });
-        }
-
-        const highlightDimensions = this.highlight_current();
-        let highlightDimensionsCustom;
-        if (this.options.custom_marker) {
-            highlightDimensionsCustom = this.highlight_custom(
-                this.config.custom_marker_date,
-            );
-        }
-        if (!highlightDimensions || !highlightDimensionsCustom) return;
-
-        // Toggle highlights based on player state
+        this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
-            try {
-                this.play_animated_highlight(
-                    highlightDimensionsCustom.left,
-                    highlightDimensionsCustom.dateObj,
-                );
-                // Hide custom highlight when playing
-                if (this.$custom_highlight)
-                    this.$custom_highlight.style.display = 'none';
-                if (this.$custom_ball_highlight)
-                    this.$custom_ball_highlight.style.display = 'none';
-            } catch (e) {
-                console.error('Error playing animated highlight:', e);
+            // Start player interval
+            this.player_interval = setInterval(
+                this.player_update.bind(this),
+                this.options.player_interval || 1000,
+            );
+            this.trigger_event('start', []);
+
+            // Update button
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-play');
+                this.$player_button.classList.add('fa-pause');
+            } else {
+                this.$player_button.textContent = 'Pause';
             }
+
+            // Hide custom highlight, show animated highlight
+            if (this.$custom_highlight)
+                this.$custom_highlight.style.display = 'none';
+            if (this.$custom_ball_highlight)
+                this.$custom_ball_highlight.style.display = 'none';
+
+            const attemptHighlight = (retryCount = 0, maxRetries = 10) => {
+                const customHighlight =
+                    this.$container.querySelector('.custom-highlight');
+                if (!customHighlight && retryCount < maxRetries) {
+                    console.warn(
+                        `custom-highlight not found in toggle_play, retrying (${retryCount + 1}/${maxRetries}) in 200ms`,
+                    );
+                    setTimeout(
+                        () => attemptHighlight(retryCount + 1, maxRetries),
+                        200,
+                    );
+                    return;
+                }
+
+                const highlightDimensions = this.highlight_custom(
+                    this.config.custom_marker_date,
+                );
+                console.log(
+                    'toggle_play highlightDimensions:',
+                    highlightDimensions,
+                );
+
+                if (
+                    !highlightDimensions ||
+                    isNaN(highlightDimensions.left) ||
+                    highlightDimensions.left === 0
+                ) {
+                    console.error(
+                        'Invalid highlightDimensions in toggle_play, using fallback',
+                    );
+                    highlightDimensions.left = customHighlight
+                        ? parseFloat(customHighlight.style.left) || 0
+                        : 0;
+                    highlightDimensions.dateObj =
+                        this.config.custom_marker_date;
+                }
+
+                this.play_animated_highlight(
+                    highlightDimensions.left,
+                    highlightDimensions.dateObj,
+                );
+            };
+
+            attemptHighlight();
         } else {
-            // Show custom highlight when paused
+            // Stop player interval
+            clearInterval(this.player_interval);
+            this.trigger_event('pause', []);
+
+            // Update button
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-pause');
+                this.$player_button.classList.add('fa-play');
+            } else {
+                this.$player_button.textContent = 'Play';
+            }
+
+            // Pause animation, show custom highlight
+            if (this.$animated_highlight)
+                this.$animated_highlight.style.animationPlayState = 'paused';
+            if (this.$animated_ball_highlight)
+                this.$animated_ball_highlight.style.animationPlayState =
+                    'paused';
             if (this.$custom_highlight)
                 this.$custom_highlight.style.display = 'block';
             if (this.$custom_ball_highlight)
                 this.$custom_ball_highlight.style.display = 'block';
-            // Remove animated highlight when paused
-            if (this.$animated_highlight) this.$animated_highlight.remove();
-            if (this.$animated_ball_highlight)
-                this.$animated_ball_highlight.remove();
         }
+    }
+
+    reset_play() {
+        this.config.custom_marker_date = new Date(
+            this.options.custom_marker_init_date,
+        );
+        this.options.player_state = false;
+        this.overlapping_tasks.clear();
+        clearInterval(this.player_interval);
+
+        // Update button
+        if (this.options.player_use_fa) {
+            this.$player_button.classList.remove('fa-pause');
+            this.$player_button.classList.add('fa-play');
+        } else {
+            this.$player_button.textContent = 'Play';
+        }
+
+        // Remove animated highlight, show custom highlight
+        if (this.$animated_highlight) {
+            this.$animated_highlight.remove();
+            this.$animated_highlight = null;
+        }
+        if (this.$animated_ball_highlight) {
+            this.$animated_ball_highlight.remove();
+            this.$animated_ball_highlight = null;
+        }
+        if (this.$custom_highlight)
+            this.$custom_highlight.style.display = 'block';
+        if (this.$custom_ball_highlight)
+            this.$custom_ball_highlight.style.display = 'block';
+
+        // Re-render to update custom highlight position
+        this.render();
+        this.trigger_event('reset', []);
     }
 
     create_el({
@@ -1422,162 +1559,6 @@ export default class Gantt {
         // Update scroll position if needed
         this.options.scroll_to = 'custom';
         this.scroll_custom_marker();
-    }
-
-    toggle_play() {
-        if (!this.config.custom_marker_date) {
-            console.warn(
-                'custom_marker_date not set, using default:',
-                this.config.custom_marker_init_date || new Date(),
-            );
-            this.config.custom_marker_date =
-                this.config.custom_marker_init_date || new Date();
-        }
-        console.log(
-            'toggle_play custom_marker_date:',
-            this.config.custom_marker_date,
-        );
-
-        this.options.player_state = !this.options.player_state;
-        if (this.options.player_state) {
-            // Start player interval
-            this.player_interval = setInterval(
-                this.player_update.bind(this),
-                this.options.player_interval || 1000,
-            );
-            this.trigger_event('start', []);
-
-            // Update button
-            if (this.options.player_use_fa) {
-                this.$player_button.classList.remove('fa-play');
-                this.$player_button.classList.add('fa-pause');
-            } else {
-                this.$player_button.textContent = 'Pause';
-            }
-
-            // Hide custom highlight, show animated highlight
-            if (this.$custom_highlight)
-                this.$custom_highlight.style.display = 'none';
-            if (this.$custom_ball_highlight)
-                this.$custom_ball_highlight.style.display = 'none';
-
-            const attemptHighlight = (retryCount = 0, maxRetries = 5) => {
-                const highlightDimensions = this.highlight_custom(
-                    this.config.custom_marker_date,
-                );
-                console.log(
-                    'toggle_play highlightDimensions:',
-                    highlightDimensions,
-                );
-
-                if (
-                    !highlightDimensions ||
-                    isNaN(highlightDimensions.left) ||
-                    highlightDimensions.left === 0
-                ) {
-                    if (retryCount < maxRetries) {
-                        console.warn(
-                            `Invalid highlightDimensions, retrying (${retryCount + 1}/${maxRetries}) in 100ms`,
-                        );
-                        setTimeout(
-                            () => attemptHighlight(retryCount + 1, maxRetries),
-                            100,
-                        );
-                        return;
-                    } else {
-                        console.error(
-                            'Invalid highlightDimensions after max retries, using custom-highlight position',
-                        );
-                        const customHighlight =
-                            this.$container.querySelector('.custom-highlight');
-                        highlightDimensions = {
-                            left: customHighlight
-                                ? parseFloat(customHighlight.style.left) || 0
-                                : 0,
-                            dateObj: this.config.custom_marker_date,
-                        };
-                    }
-                }
-
-                this.play_animated_highlight(
-                    highlightDimensions.left,
-                    highlightDimensions.dateObj,
-                );
-            };
-
-            attemptHighlight();
-        } else {
-            // Stop player interval
-            clearInterval(this.player_interval);
-            this.trigger_event('pause', []);
-
-            // Update button
-            if (this.options.player_use_fa) {
-                this.$player_button.classList.remove('fa-pause');
-                this.$player_button.classList.add('fa-play');
-            } else {
-                this.$player_button.textContent = 'Play';
-            }
-
-            // Pause animation, show custom highlight
-            if (this.$animated_highlight)
-                this.$animated_highlight.style.animationPlayState = 'paused';
-            if (this.$animated_ball_highlight)
-                this.$animated_ball_highlight.style.animationPlayState =
-                    'paused';
-            if (this.$custom_highlight)
-                this.$custom_highlight.style.display = 'block';
-            if (this.$custom_ball_highlight)
-                this.$custom_ball_highlight.style.display = 'block';
-        }
-    }
-
-    highlight_custom(date) {
-        console.log('highlight_custom called with date:', date, {
-            gantt_start: this.gantt_start,
-            unit: this.config.unit,
-            step: this.config.step,
-            column_width: this.config.column_width,
-        });
-        const diff = date_utils.diff(date, this.gantt_start, this.config.unit);
-        const left = (diff / this.config.step) * this.config.column_width;
-        console.log('highlight_custom result:', { diff, left });
-        return { left, dateObj: date };
-    }
-
-    reset_play() {
-        this.config.custom_marker_date = new Date(
-            this.options.custom_marker_init_date,
-        );
-        this.options.player_state = false;
-        this.overlapping_tasks.clear();
-        clearInterval(this.player_interval);
-
-        // Update button
-        if (this.options.player_use_fa) {
-            this.$player_button.classList.remove('fa-pause');
-            this.$player_button.classList.add('fa-play');
-        } else {
-            this.$player_button.textContent = 'Play';
-        }
-
-        // Remove animated highlight, show custom highlight
-        if (this.$animated_highlight) {
-            this.$animated_highlight.remove();
-            this.$animated_highlight = null;
-        }
-        if (this.$animated_ball_highlight) {
-            this.$animated_ball_highlight.remove();
-            this.$animated_ball_highlight = null;
-        }
-        if (this.$custom_highlight)
-            this.$custom_highlight.style.display = 'block';
-        if (this.$custom_ball_highlight)
-            this.$custom_ball_highlight.style.display = 'block';
-
-        // Re-render to update custom highlight position
-        this.render();
-        this.trigger_event('reset', []);
     }
 
     get_closest_date_to(date) {
