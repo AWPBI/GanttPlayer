@@ -871,7 +871,7 @@ export default class Gantt {
             highlightDimensionsCustom = this.highlight_custom(
                 this.config.custom_marker_date,
             );
-            this.play_animated_highlight(
+            play_animated_highlight(
                 highlightDimensionsCustom.left,
                 highlightDimensionsCustom.dateObj,
             );
