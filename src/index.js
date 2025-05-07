@@ -789,6 +789,7 @@ export default class Gantt {
     }
 
     play_animated_highlight(left, dateObj) {
+        if (!left || !dateObj) return;
         this.$animated_highlight = this.create_el({
             top: this.config.header_height,
             left,
