@@ -17,6 +17,7 @@ export default class Gantt {
         this.overlapping_tasks = new Set();
         this.change_view_mode();
         this.bind_events();
+        this.scrollAnimationFrame = null; // Track animation frame
     }
 
     setup_wrapper(element) {
@@ -998,12 +999,9 @@ export default class Gantt {
                 this.$player_button.textContent = 'Pause';
             }
 
-            // Hide custom highlight, show animated highlight
-            if (this.$custom_highlight)
-                // this.$custom_highlight.style.display = 'none';
-                this.$custom_highlight.remove();
+            // Hide custom highlight, initialize animated highlight
+            if (this.$custom_highlight) this.$custom_highlight.remove();
             if (this.$custom_ball_highlight)
-                // this.$custom_ball_highlight.style.display = 'none';
                 this.$custom_ball_highlight.remove();
             const highlightDimensions = this.highlight_custom(
                 this.config.custom_marker_date,
@@ -1014,8 +1012,12 @@ export default class Gantt {
                 highlightDimensions.dateObj,
             );
         } else {
-            // Stop player interval
+            // Stop player interval and animation
             clearInterval(this.player_interval);
+            if (this.scrollAnimationFrame) {
+                cancelAnimationFrame(this.scrollAnimationFrame);
+                this.scrollAnimationFrame = null;
+            }
             this.trigger_event('pause', []);
 
             // Update button
@@ -1046,6 +1048,10 @@ export default class Gantt {
         this.options.player_state = false;
         this.overlapping_tasks.clear();
         clearInterval(this.player_interval);
+        if (this.scrollAnimationFrame) {
+            cancelAnimationFrame(this.scrollAnimationFrame);
+            this.scrollAnimationFrame = null;
+        }
 
         // Update button
         if (this.options.player_use_fa) {
@@ -1309,45 +1315,16 @@ export default class Gantt {
     }
 
     scroll_custom_marker() {
-        let res = this.get_closest_date_to(this.config.custom_marker_date);
-        if (res && res[0] < this.config.player_end_date) {
-            this.set_scroll_position(
-                date_utils.add(res[0], -3, this.config.unit),
-            );
-        } else {
-            if (this.options.player_loop) {
-                this.config.custom_marker_date = new Date(
-                    this.options.custom_marker_init_date,
-                );
-                let res = this.get_closest_date_to(
-                    this.config.custom_marker_date,
-                );
-                if (res) {
-                    this.set_scroll_position(
-                        date_utils.add(res[0], -3, this.config.unit),
-                    );
-                }
-            } else {
-                this.options.player_state = false;
-                this.overlapping_tasks.clear();
-                clearInterval(this.player_interval);
-                // Show custom highlight when stopping
-                if (this.$custom_highlight)
-                    this.$custom_highlight.style.display = 'block';
-                if (this.$custom_ball_highlight)
-                    this.$custom_ball_highlight.style.display = 'block';
-                // Remove animated highlight
-                if (this.$animated_highlight) {
-                    this.$animated_highlight.remove();
-                    this.$animated_highlight = null;
-                }
-                if (this.$animated_ball_highlight) {
-                    this.$animated_ball_highlight.remove();
-                    this.$animated_ball_highlight = null;
-                }
-                this.render();
-                this.trigger_event('finish', []);
-            }
+        const res = this.get_closest_date_to(this.config.custom_marker_date);
+        if (!res) return;
+
+        // Scrolling is handled by start_scroll_animation in player_update
+        // Only handle end condition here
+        if (
+            this.config.player_end_date &&
+            res[0] >= this.config.player_end_date
+        ) {
+            this.handle_animation_end();
         }
     }
 
@@ -1372,7 +1349,7 @@ export default class Gantt {
         if (this.$animated_highlight && this.$animated_ball_highlight) {
             // Reset animation to start from new position
             this.$animated_highlight.style.left = `${newLeft}px`;
-            this.$animated_ball_highlight.style.left = `${newLeft - 2.5}px`;
+            this.$animated_ball_highlight.style.left = `${newLeft - 2}px`;
 
             const animationDuration =
                 (this.options.player_interval || 1000) / 1000;
@@ -1429,9 +1406,106 @@ export default class Gantt {
             this.overlapping_tasks = new_overlapping;
         }
 
-        // Update scroll position if needed
-        this.options.scroll_to = 'custom';
-        this.scroll_custom_marker();
+        // Start smooth scrolling animation
+        this.start_scroll_animation(newLeft);
+    }
+
+    start_scroll_animation(startLeft) {
+        // Cancel any existing animation frame
+        if (this.scrollAnimationFrame) {
+            cancelAnimationFrame(this.scrollAnimationFrame);
+        }
+
+        const animationDuration = (this.options.player_interval || 1000) / 1000;
+        const moveDistance = this.config.column_width;
+        const startTime = performance.now();
+        const container = this.$container;
+        const viewportWidth = container.clientWidth;
+        const maxScroll = container.scrollWidth - viewportWidth;
+
+        // Desired offset to keep highlight in view (e.g., 1/6th of viewport from left)
+        const offset = viewportWidth / 6;
+
+        const animateScroll = (currentTime) => {
+            const elapsed = (currentTime - startTime) / 1000; // Time in seconds
+            const progress = Math.min(elapsed / animationDuration, 1); // Animation progress [0,1]
+            const currentLeft = startLeft + moveDistance * progress; // Current highlight position
+
+            // Calculate desired scroll position to keep highlight in view
+            let targetScroll = currentLeft - offset;
+
+            // Clamp scroll position to chart bounds
+            targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
+
+            // Update scroll position
+            container.scrollLeft = targetScroll;
+
+            // Check if animation should continue
+            const res = this.get_closest_date_to(
+                this.config.custom_marker_date,
+            );
+            const isBeyondEnd =
+                res && this.config.player_end_date
+                    ? res[0] >= this.config.player_end_date
+                    : false;
+
+            if (progress < 1 && !isBeyondEnd) {
+                // Continue animation
+                this.scrollAnimationFrame =
+                    requestAnimationFrame(animateScroll);
+            } else {
+                // Animation complete or end date reached
+                this.scrollAnimationFrame = null;
+                if (isBeyondEnd) {
+                    this.handle_animation_end();
+                }
+            }
+        };
+
+        // Start animation
+        this.scrollAnimationFrame = requestAnimationFrame(animateScroll);
+    }
+
+    handle_animation_end() {
+        if (this.options.player_loop) {
+            // Reset to initial date and continue
+            this.config.custom_marker_date = new Date(
+                this.options.custom_marker_init_date,
+            );
+            this.overlapping_tasks.clear();
+            this.render();
+            this.player_update();
+        } else {
+            // Stop player
+            this.options.player_state = false;
+            this.overlapping_tasks.clear();
+            clearInterval(this.player_interval);
+
+            // Update button
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-pause');
+                this.$player_button.classList.add('fa-play');
+            } else {
+                this.$player_button.textContent = 'Play';
+            }
+
+            // Show custom highlight, remove animated highlight
+            if (this.$custom_highlight)
+                this.$custom_highlight.style.display = 'block';
+            if (this.$custom_ball_highlight)
+                this.$custom_ball_highlight.style.display = 'block';
+            if (this.$animated_highlight) {
+                this.$animated_highlight.remove();
+                this.$animated_highlight = null;
+            }
+            if (this.$animated_ball_highlight) {
+                this.$animated_ball_highlight.remove();
+                this.$animated_ball_highlight = null;
+            }
+
+            this.render();
+            this.trigger_event('finish', []);
+        }
     }
 
     get_closest_date_to(date) {
