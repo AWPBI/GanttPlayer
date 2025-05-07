@@ -660,7 +660,7 @@ export default class Gantt {
                         ) /
                             this.config.step) *
                         this.config.column_width;
-                    const height = this.grid_height - this.config.header_height;
+                    const height = this.grid_height - this.config.header0;
                     const d_formatted = date_utils
                         .format(d, 'YYYY-MM-DD', this.options.language)
                         .replace(' ', '_');
@@ -869,6 +869,7 @@ export default class Gantt {
         let adjustedDateObj = dateObj;
 
         if (!dateObj || isNaN(left) || left === 0) {
+            const customHighlight = this.$custom_highlight;
             if (customHighlight) {
                 adjustedLeft = parseFloat(customHighlight.style.left) || 0;
                 console.log('Using custom-highlight left:', adjustedLeft);
@@ -952,24 +953,62 @@ export default class Gantt {
             this.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
         }
 
-        // Calculate animation duration
-        const animationDuration = (this.options.player_interval || 1000) / 1000;
-        const moveDistance = this.config.column_width;
+        // Check if animation should proceed
+        let shouldAnimate = true;
+        let animationDuration = (this.options.player_interval || 1000) / 1000;
+        let moveDistance = this.config.column_width;
 
-        // Apply animation properties
-        [this.$animated_highlight, this.$animated_ball_highlight].forEach(
-            (el) => {
-                el.style.setProperty(
-                    '--animation-duration',
-                    `${animationDuration}s`,
-                );
-                el.style.setProperty('--move-distance', `${moveDistance}px`);
-                el.style.animation = `none`;
-                el.offsetHeight;
-                el.style.animation = `moveRight ${animationDuration}s linear forwards`;
-                el.style.animationPlayState = 'running';
-            },
-        );
+        if (
+            this.config.player_end_date &&
+            adjustedDateObj >= this.config.player_end_date
+        ) {
+            shouldAnimate = false;
+        } else if (
+            this.config.player_end_date &&
+            date_utils.add(
+                adjustedDateObj,
+                this.config.step,
+                this.config.unit,
+            ) > this.config.player_end_date
+        ) {
+            // Calculate partial animation for the final step
+            const remainingTime = date_utils.diff(
+                this.config.player_end_date,
+                adjustedDateObj,
+                'millisecond',
+            );
+            animationDuration =
+                remainingTime / (this.options.player_interval || 1000);
+            const totalUnits = date_utils.diff(
+                this.config.player_end_date,
+                this.gantt_start,
+                this.config.unit,
+            );
+            const endLeft =
+                (totalUnits / this.config.step) * this.config.column_width;
+            moveDistance = endLeft - adjustedLeft;
+            shouldAnimate = moveDistance > 0;
+        }
+
+        // Apply animation properties if needed
+        if (shouldAnimate) {
+            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
+                (el) => {
+                    el.style.setProperty(
+                        '--animation-duration',
+                        `${animationDuration}s`,
+                    );
+                    el.style.setProperty(
+                        '--move-distance',
+                        `${moveDistance}px`,
+                    );
+                    el.style.animation = `none`;
+                    el.offsetHeight;
+                    el.style.animation = `moveRight ${animationDuration}s linear forwards`;
+                    el.style.animationPlayState = 'running';
+                },
+            );
+        }
 
         return {
             left: adjustedLeft,
