@@ -851,8 +851,8 @@ export default class Gantt {
         // Toggle highlights based on player state
         if (this.options.player_state) {
             this.play_animated_highlight(
-                highlightDimensionsCustom.left,
-                highlightDimensionsCustom.dateObj,
+                highlightDimensions.left,
+                highlightDimensions.dateObj,
             );
             // Hide custom highlight when playing
             if (this.$custom_highlight)
