@@ -879,10 +879,14 @@ export default class Gantt {
         }
         if (!highlightDimensions || !highlightDimensionsCustom) return;
         if (this.options.player_state) {
-            this.play_animated_highlight(
-                highlightDimensionsCustom.left,
-                highlightDimensionsCustom.dateObj,
-            );
+            try {
+                this.play_animated_highlight(
+                    highlightDimensionsCustom.left,
+                    highlightDimensionsCustom.dateObj,
+                );
+            } catch (e) {
+                console.error('Error playing animated highlight:', e);
+            }
         }
     }
 
