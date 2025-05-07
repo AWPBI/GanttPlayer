@@ -780,7 +780,7 @@ export default class Gantt {
 
             if (!customHighlight) {
                 console.error(
-                    'custom-highlight not found after max retries, using fallback height and left',
+                    'custom-highlight not found after max retries, proceeding with fallback',
                 );
             }
 
@@ -794,7 +794,6 @@ export default class Gantt {
                     console.log('Using custom-highlight left:', adjustedLeft);
                 }
                 if (adjustedLeft === 0) {
-                    // Fallback to calculated left
                     adjustedLeft =
                         (date_utils.diff(
                             this.config.custom_marker_date,
@@ -815,14 +814,17 @@ export default class Gantt {
                 adjustedDateObj,
             );
 
-            // Get height from custom-highlight
-            let highlightHeight = 1152; // Default to correct height
-            if (customHighlight) {
-                const computedStyle = getComputedStyle(customHighlight);
-                highlightHeight = parseFloat(computedStyle.height);
-                console.log('Using custom-highlight height:', highlightHeight);
+            // Get grid height
+            let gridHeight = 1152; // Default to correct height
+            const gridElement = this.$svg.querySelector('.grid');
+            if (gridElement) {
+                gridHeight = gridElement.getBoundingClientRect().height;
+                console.log('Grid element height:', gridHeight);
             } else {
-                console.warn('Using default height:', highlightHeight);
+                console.warn(
+                    'Grid element not found, using default height:',
+                    gridHeight,
+                );
             }
 
             // Create animated highlight bar if not exists
@@ -831,20 +833,20 @@ export default class Gantt {
                     top: this.config.header_height,
                     left: adjustedLeft,
                     width: 2,
-                    height: highlightHeight,
+                    height: gridHeight,
                     classes: 'animated-highlight',
                     append_to: this.$container,
                     style: 'background: var(--g-custom-highlight); z-index: 999;',
                 });
             } else {
                 this.$animated_highlight.style.left = `${adjustedLeft}px`;
-                this.$animated_highlight.style.height = `${highlightHeight}px`;
+                this.$animated_highlight.style.height = `${gridHeight}px`;
             }
 
             // Debug height and CSS variables
             const animatedStyle = getComputedStyle(this.$animated_highlight);
             const height = animatedStyle.height;
-            const gridHeight = getComputedStyle(
+            const cssGridHeight = getComputedStyle(
                 document.documentElement,
             ).getPropertyValue('--gv-grid-height');
             const lowerHeaderHeight = getComputedStyle(
@@ -854,12 +856,12 @@ export default class Gantt {
                 document.documentElement,
             ).getPropertyValue('--gv-upper-header-height');
             console.log('Animated highlight height:', height, {
-                '--gv-grid-height': gridHeight,
+                '--gv-grid-height': cssGridHeight,
                 '--gv-lower-header-height': lowerHeaderHeight,
                 '--gv-upper-header-height': upperHeaderHeight,
                 'this.grid_height': this.grid_height,
                 'this.config.header_height': this.config.header_height,
-                custom_highlight_height: highlightHeight,
+                grid_element_height: gridHeight,
             });
 
             // Create animated highlight ball if not exists
@@ -908,6 +910,76 @@ export default class Gantt {
 
         // Initial attempt
         return attemptHighlight();
+    }
+
+    init_custom_highlight() {
+        if (!this.config.custom_marker_date) {
+            console.warn(
+                'custom_marker_date not set, using custom_marker_init_date:',
+                this.config.custom_marker_init_date || new Date(),
+            );
+            this.config.custom_marker_date =
+                this.config.custom_marker_init_date || new Date();
+        }
+
+        const highlightDimensions = this.highlight_custom(
+            this.config.custom_marker_date,
+        );
+        console.log('init_custom_highlight dimensions:', highlightDimensions);
+
+        if (!highlightDimensions || isNaN(highlightDimensions.left)) {
+            console.error(
+                'Invalid highlightDimensions for init_custom_highlight, retrying in 100ms',
+            );
+            setTimeout(() => this.init_custom_highlight(), 100);
+            return;
+        }
+
+        // Get grid height
+        let gridHeight = 1152; // Default to correct height
+        const gridElement = this.$svg.querySelector('.grid');
+        if (gridElement) {
+            gridHeight = gridElement.getBoundingClientRect().height;
+            console.log('Grid element height:', gridHeight);
+        } else {
+            console.warn(
+                'Grid element not found, using default height:',
+                gridHeight,
+            );
+        }
+
+        // Create or update custom highlight
+        if (!this.$custom_highlight) {
+            this.$custom_highlight = this.create_el({
+                top: this.config.header_height,
+                left: highlightDimensions.left,
+                width: 2,
+                height: gridHeight,
+                classes: 'custom-highlight',
+                append_to: this.$container,
+                style: 'background: var(--g-custom-highlight); z-index: 999; display: block;',
+            });
+        } else {
+            this.$custom_highlight.style.left = `${highlightDimensions.left}px`;
+            this.$custom_highlight.style.height = `${gridHeight}px`;
+            this.$custom_highlight.style.display = 'block';
+        }
+
+        // Create or update custom ball highlight
+        if (!this.$custom_ball_highlight) {
+            this.$custom_ball_highlight = this.create_el({
+                top: this.config.header_height - 6,
+                left: highlightDimensions.left - 2,
+                width: 6,
+                height: 6,
+                classes: 'custom-ball-highlight',
+                append_to: this.$header,
+                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001; display: block;',
+            });
+        } else {
+            this.$custom_ball_highlight.style.left = `${highlightDimensions.left - 2}px`;
+            this.$custom_ball_highlight.style.display = 'block';
+        }
     }
 
     make_grid_highlights() {
@@ -1414,10 +1486,14 @@ export default class Gantt {
                         return;
                     } else {
                         console.error(
-                            'Invalid highlightDimensions after max retries, using fallback date',
+                            'Invalid highlightDimensions after max retries, using custom-highlight position',
                         );
+                        const customHighlight =
+                            this.$container.querySelector('.custom-highlight');
                         highlightDimensions = {
-                            left: 0,
+                            left: customHighlight
+                                ? parseFloat(customHighlight.style.left) || 0
+                                : 0,
                             dateObj: this.config.custom_marker_date,
                         };
                     }
@@ -1456,18 +1532,18 @@ export default class Gantt {
         }
     }
 
-    highlight_custom(date) {
-        console.log('highlight_custom called with date:', date, {
-            gantt_start: this.gantt_start,
-            unit: this.config.unit,
-            step: this.config.step,
-            column_width: this.config.column_width,
-        });
-        const diff = date_utils.diff(date, this.gantt_start, this.config.unit);
-        const left = (diff / this.config.step) * this.config.column_width;
-        console.log('highlight_custom result:', { diff, left });
-        return { left, dateObj: date };
-    }
+    // highlight_custom(date) {
+    //     console.log('highlight_custom called with date:', date, {
+    //         gantt_start: this.gantt_start,
+    //         unit: this.config.unit,
+    //         step: this.config.step,
+    //         column_width: this.config.column_width,
+    //     });
+    //     const diff = date_utils.diff(date, this.gantt_start, this.config.unit);
+    //     const left = (diff / this.config.step) * this.config.column_width;
+    //     console.log('highlight_custom result:', { diff, left });
+    //     return { left, dateObj: date };
+    // }
 
     reset_play() {
         this.config.custom_marker_date = new Date(
