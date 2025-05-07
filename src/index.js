@@ -769,29 +769,20 @@ export default class Gantt {
         const customHighlight =
             this.$container.querySelector('.custom-highlight');
 
-        const diff_in_units = date_utils.diff(
-            dateObj,
-            this.gantt_start,
-            this.config.unit,
-        );
-
-        const leftTest =
-            (diff_in_units / this.config.step) * this.config.column_width;
-
         if (!dateObj || isNaN(left) || left === 0) {
             if (customHighlight) {
                 adjustedLeft = parseFloat(customHighlight.style.left) || 0;
                 console.log('Using custom-highlight left:', adjustedLeft);
             } else {
                 // Fallback to calculated left
-                adjustedLeft = leftTest;
-                // (date_utils.diff(
-                //     this.config.custom_marker_date,
-                //     this.gantt_start,
-                //     this.config.unit,
-                // ) /
-                //     this.config.step) *
-                // this.config.column_width;
+                adjustedLeft =
+                    (date_utils.diff(
+                        this.config.custom_marker_date,
+                        this.gantt_start,
+                        this.config.unit,
+                    ) /
+                        this.config.step) *
+                    this.config.column_width;
                 console.log('Using calculated left:', adjustedLeft);
             }
             adjustedDateObj = this.config.custom_marker_date || new Date();
@@ -952,8 +943,8 @@ export default class Gantt {
         if (this.options.player_state) {
             try {
                 this.play_animated_highlight(
-                    highlightDimensionsCustom.left,
-                    highlightDimensionsCustom.dateObj,
+                    highlightDimensions.left,
+                    highlightDimensions.dateObj,
                 );
                 // Hide custom highlight when playing
                 if (this.$custom_highlight)
