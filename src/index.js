@@ -763,9 +763,17 @@ export default class Gantt {
     }
 
     play_animated_highlight(left, dateObj) {
-        if (!left || !dateObj) {
+        if (!dateObj || isNaN(left)) {
             console.warn('Invalid left or dateObj:', { left, dateObj });
-            return null;
+            // Fallback: Calculate left based on custom_marker_date
+            const diff = date_utils.diff(
+                this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
+            );
+            left = (diff / this.config.step) * this.config.column_width;
+            dateObj = this.config.custom_marker_date;
+            console.log('Using fallback left:', left);
         }
 
         console.log(
@@ -790,11 +798,31 @@ export default class Gantt {
             this.$animated_highlight.style.left = `${left}px`;
         }
 
+        // Log computed height and CSS variables
+        const computedStyle = getComputedStyle(this.$animated_highlight);
+        const height = computedStyle.height;
+        const gridHeight = getComputedStyle(
+            document.documentElement,
+        ).getPropertyValue('--gv-grid-height');
+        const lowerHeaderHeight = getComputedStyle(
+            document.documentElement,
+        ).getPropertyValue('--gv-lower-header-height');
+        const upperHeaderHeight = getComputedStyle(
+            document.documentElement,
+        ).getPropertyValue('--gv-upper-header-height');
+        console.log('Animated highlight height:', height, {
+            '--gv-grid-height': gridHeight,
+            '--gv-lower-header-height': lowerHeaderHeight,
+            '--gv-upper-header-height': upperHeaderHeight,
+            'this.grid_height': this.grid_height,
+            'this.config.header_height': this.config.header_height,
+        });
+
         // Create animated highlight ball if not exists
         if (!this.$animated_ball_highlight) {
             this.$animated_ball_highlight = this.create_el({
                 top: this.config.header_height - 6,
-                left: left - 2, // Adjusted to center ball on bar (2px bar width / 2)
+                left: left - 2, // Center on 2px bar
                 width: 6,
                 height: 6,
                 classes: 'animated-ball-highlight',
