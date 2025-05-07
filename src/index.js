@@ -866,16 +866,17 @@ export default class Gantt {
         }
 
         const highlightDimensions = this.highlight_current();
-
         let highlightDimensionsCustom;
         if (this.options.custom_marker) {
             highlightDimensionsCustom = this.highlight_custom(
                 this.config.custom_marker_date,
             );
-            this.play_animated_highlight(
-                highlightDimensionsCustom.left,
-                highlightDimensionsCustom.dateObj,
-            );
+            if (this.play_animated_highlight && highlightDimensionsCustom) {
+                this.play_animated_highlight(
+                    highlightDimensionsCustom.left,
+                    highlightDimensionsCustom.dateObj,
+                );
+            }
         }
         if (!highlightDimensions || !highlightDimensionsCustom) return;
     }
