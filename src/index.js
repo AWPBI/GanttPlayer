@@ -22,7 +22,6 @@ export default class Gantt {
     setup_wrapper(element) {
         let svg_element, wrapper_element;
 
-        // CSS Selector is passed
         if (typeof element === 'string') {
             let el = document.querySelector(element);
             if (!el) {
@@ -33,7 +32,6 @@ export default class Gantt {
             element = el;
         }
 
-        // get the SVGElement
         if (element instanceof HTMLElement) {
             wrapper_element = element;
             svg_element = element.querySelector('svg');
@@ -46,9 +44,7 @@ export default class Gantt {
             );
         }
 
-        // svg element
         if (!svg_element) {
-            // create it
             this.$svg = createSVG('svg', {
                 append_to: wrapper_element,
                 class: 'gantt',
@@ -58,7 +54,6 @@ export default class Gantt {
             this.$svg.classList.add('gantt');
         }
 
-        // wrapper element
         this.$container = this.create_el({
             classes: 'gantt-container',
             append_to: this.$svg.parentElement,
@@ -110,7 +105,7 @@ export default class Gantt {
         }
         if (typeof this.options.ignore !== 'function') {
             if (typeof this.options.ignore === 'string')
-                this.options.ignore = [this.options.ignord];
+                this.options.ignore = [this.options.ignore];
             for (let option of this.options.ignore) {
                 if (typeof option === 'function') {
                     this.config.ignored_function = option;
@@ -169,7 +164,6 @@ export default class Gantt {
                     return false;
                 }
 
-                // make task invalid if duration too large
                 if (date_utils.diff(task._end, task._start, 'year') > 10) {
                     console.error(
                         `the duration of task "${task.id}" is too long (above ten years)`,
@@ -177,17 +171,13 @@ export default class Gantt {
                     return false;
                 }
 
-                // cache index
                 task._index = i;
 
-                // if hours is not set, assume the last day is full day
-                // e.g: 2018-09-09 becomes 2018-09-09 23:59:59
                 const task_end_values = date_utils.get_date_values(task._end);
                 if (task_end_values.slice(3).every((d) => d === 0)) {
                     task._end = date_utils.add(task._end, 24, 'hour');
                 }
 
-                // dependencies
                 if (
                     typeof task.dependencies === 'string' ||
                     !task.dependencies
@@ -202,7 +192,6 @@ export default class Gantt {
                     task.dependencies = deps;
                 }
 
-                // uids
                 if (!task.id) {
                     task.id = generate_id(task);
                 } else if (typeof task.id === 'string') {
@@ -377,7 +366,6 @@ export default class Gantt {
     setup_layers() {
         this.layers = {};
         const layers = ['grid', 'arrow', 'progress', 'bar'];
-        // make group layers
         for (let layer of layers) {
             this.layers[layer] = createSVG('g', {
                 class: layer,
@@ -483,7 +471,6 @@ export default class Gantt {
         this.$side_header = this.create_el({ classes: 'side-header' });
         this.$upper_header.prepend(this.$side_header);
 
-        // Create view mode change select
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
             $select.classList.add('viewmode-select');
@@ -512,7 +499,6 @@ export default class Gantt {
             this.$side_header.appendChild($select);
         }
 
-        // Create today button
         if (this.options.today_button) {
             let $today_button = document.createElement('button');
             $today_button.classList.add('today-button');
@@ -522,21 +508,19 @@ export default class Gantt {
             this.$today_button = $today_button;
         }
 
-        // Create player reset button
         if (this.options.player_button) {
             let player_reset_button = document.createElement('button');
             player_reset_button.classList.add('player-reset-button');
             if (this.options.player_use_fa) {
                 player_reset_button.classList.add('fas', 'fa-redo');
             } else {
-                player_reset_button.textContent = 'Reset'; //❚❚
+                player_reset_button.textContent = 'Reset';
             }
             player_reset_button.onclick = this.reset_play.bind(this);
             this.$side_header.prepend(player_reset_button);
             this.$player_reset_button = player_reset_button;
         }
 
-        // Create player button
         if (this.options.player_button) {
             let $player_button = document.createElement('button');
             $player_button.classList.add('player-button');
@@ -706,11 +690,6 @@ export default class Gantt {
         }
     }
 
-    /**
-     * Compute the horizontal x-axis distance and associated date for the current date and view.
-     *
-     * @returns Object containing the x-axis distance and date of the current date, or null if the current date is out of the gantt range.
-     */
     highlight_current() {
         const res = this.get_closest_date();
         if (!res) return null;
@@ -747,11 +726,6 @@ export default class Gantt {
         return { left, dateObj };
     }
 
-    /**
-     * Compute the horizontal x-axis distance and associated date for the custom date and view.
-     *
-     * @returns Object containing the x-axis distance and date of the custom date, or null if the custom date is out of the gantt range.
-     */
     highlight_custom(date) {
         const res = this.get_closest_date_to(date);
         if (!res) return null;
@@ -796,7 +770,7 @@ export default class Gantt {
             height: this.grid_height - this.config.header_height,
             classes: 'animated-highlight',
             append_to: this.$container,
-            style: 'fill: #ff0000;',
+            style: 'background: #ff0000;',
         });
         this.$animated_ball_highlight = this.create_el({
             top: this.config.header_height - 6,
@@ -805,22 +779,16 @@ export default class Gantt {
             height: 6,
             classes: 'animated-ball-highlight',
             append_to: this.$header,
-            style: 'fill: #ff0000;',
+            style: 'background: #ff0000;',
         });
 
-        // Apply the moveRight animation, moving by column_width
-        const animationStyle = `moveRight 1s linear infinite`;
+        const animationDuration = this.options.player_interval / 1000; // Convert ms to seconds
+        const animationStyle = `moveRight ${animationDuration}s linear infinite`;
         this.$animated_highlight.style.animation = animationStyle;
         this.$animated_ball_highlight.style.animation = animationStyle;
         this.$animated_highlight.style.animationPlayState = 'running';
         this.$animated_ball_highlight.style.animationPlayState = 'running';
-        this.$animated_highlight.style.animationDirection = 'normal';
-        this.$animated_ball_highlight.style.animationDirection = 'normal';
-        this.$animated_highlight.style.animationIterationCount = 'infinite';
-        this.$animated_ball_highlight.style.animationIterationCount =
-            'infinite';
 
-        // Set the column width as a CSS variable for the animation
         this.$animated_highlight.style.setProperty(
             '--move-distance',
             `${this.config.column_width}px`,
@@ -848,6 +816,10 @@ export default class Gantt {
 
 .animated-highlight, .animated-ball-highlight {
     position: absolute;
+}
+
+.custom-highlight, .custom-ball-highlight {
+    display: none;
 }
 `;
 
@@ -910,20 +882,46 @@ export default class Gantt {
                     highlightDimensionsCustom.left,
                     highlightDimensionsCustom.dateObj,
                 );
+                // Hide custom highlight when playing
+                if (this.$custom_highlight)
+                    this.$custom_highlight.style.display = 'none';
+                if (this.$custom_ball_highlight)
+                    this.$custom_ball_highlight.style.display = 'none';
             } catch (e) {
                 console.error('Error playing animated highlight:', e);
             }
+        } else {
+            // Show custom highlight when paused
+            if (this.$custom_highlight)
+                this.$custom_highlight.style.display = 'block';
+            if (this.$custom_ball_highlight)
+                this.$custom_ball_highlight.style.display = 'block';
+            // Remove animated highlight when paused
+            if (this.$animated_highlight) this.$animated_highlight.remove();
+            if (this.$animated_ball_highlight)
+                this.$animated_ball_highlight.remove();
         }
     }
 
-    create_el({ left, top, width, height, id, classes, append_to, type }) {
+    create_el({
+        left,
+        top,
+        width,
+        height,
+        id,
+        classes,
+        append_to,
+        type,
+        style,
+    }) {
         let $el = document.createElement(type || 'div');
         for (let cls of classes.split(' ')) $el.classList.add(cls);
-        $el.style.top = top + 'px';
-        $el.style.left = left + 'px';
+        if (top !== undefined) $el.style.top = top + 'px';
+        if (left !== undefined) $el.style.left = left + 'px';
         if (id) $el.id = id;
         if (width) $el.style.width = width + 'px';
         if (height) $el.style.height = height + 'px';
+        if (style) $el.style.cssText = style;
         if (append_to) append_to.appendChild($el);
         return $el;
     }
@@ -1035,13 +1033,13 @@ export default class Gantt {
                     if (!dependency) return;
                     const arrow = new Arrow(
                         this,
-                        this.bars[dependency._index], // from_task
-                        this.bars[task._index], // to_task
+                        this.bars[dependency._index],
+                        this.bars[task._index],
                     );
                     this.layers.arrow.appendChild(arrow.element);
                     return arrow;
                 })
-                .filter(Boolean); // filter falsy values
+                .filter(Boolean);
             this.arrows = this.arrows.concat(arrows);
         }
     }
@@ -1085,8 +1083,6 @@ export default class Gantt {
             date = date_utils.parse(date);
         }
 
-        // Weird bug where infinite padding results in one day offset in scroll
-        // Related to header-body displacement
         const units_since_first_task = date_utils.diff(
             date,
             this.gantt_start,
@@ -1101,7 +1097,6 @@ export default class Gantt {
             behavior: 'smooth',
         });
 
-        // Calculate current scroll position's upper text
         if (this.$current) {
             this.$current.classList.remove('current-upper');
         }
@@ -1121,7 +1116,6 @@ export default class Gantt {
             (el) => el.textContent === current_upper,
         );
 
-        // Recalculate
         this.current_date = date_utils.add(
             this.gantt_start,
             (this.$container.scrollLeft + $el.clientWidth) /
@@ -1165,6 +1159,15 @@ export default class Gantt {
                 this.options.player_state = false;
                 this.overlapping_tasks.clear();
                 clearInterval(this.player_interval);
+                // Show custom highlight when stopping
+                if (this.$custom_highlight)
+                    this.$custom_highlight.style.display = 'block';
+                if (this.$custom_ball_highlight)
+                    this.$custom_ball_highlight.style.display = 'block';
+                // Remove animated highlight
+                if (this.$animated_highlight) this.$animated_highlight.remove();
+                if (this.$animated_ball_highlight)
+                    this.$animated_ball_highlight.remove();
             }
             this.trigger_event('finish', []);
         }
@@ -1215,7 +1218,6 @@ export default class Gantt {
 
     toggle_play() {
         this.options.player_state = !this.options.player_state;
-        console.log('toggled', this.options.player_state);
         if (this.options.player_state) {
             this.player_interval = setInterval(
                 this.player_update.bind(this),
@@ -1225,15 +1227,34 @@ export default class Gantt {
             if (this.options.player_use_fa) {
                 this.$player_button.classList.remove('fa-play');
                 this.$player_button.classList.add('fa-pause');
+            } else {
+                this.$player_button.textContent = 'Pause';
             }
+            // Hide custom highlight when playing
+            if (this.$custom_highlight)
+                this.$custom_highlight.style.display = 'none';
+            if (this.$custom_ball_highlight)
+                this.$custom_ball_highlight.style.display = 'none';
         } else {
+            clearInterval(this.player_interval);
+            this.trigger_event('pause', []);
             if (this.options.player_use_fa) {
                 this.$player_button.classList.remove('fa-pause');
                 this.$player_button.classList.add('fa-play');
+            } else {
+                this.$player_button.textContent = 'Play';
             }
-            this.trigger_event('pause', []);
-            clearInterval(this.player_interval);
+            // Show custom highlight when paused
+            if (this.$custom_highlight)
+                this.$custom_highlight.style.display = 'block';
+            if (this.$custom_ball_highlight)
+                this.$custom_ball_highlight.style.display = 'block';
+            // Remove animated highlight
+            if (this.$animated_highlight) this.$animated_highlight.remove();
+            if (this.$animated_ball_highlight)
+                this.$animated_ball_highlight.remove();
         }
+        this.render();
     }
 
     reset_play() {
@@ -1243,6 +1264,21 @@ export default class Gantt {
         this.options.player_state = false;
         this.overlapping_tasks.clear();
         clearInterval(this.player_interval);
+        if (this.options.player_use_fa) {
+            this.$player_button.classList.remove('fa-pause');
+            this.$player_button.classList.add('fa-play');
+        } else {
+            this.$player_button.textContent = 'Play';
+        }
+        // Show custom highlight when reset
+        if (this.$custom_highlight)
+            this.$custom_highlight.style.display = 'block';
+        if (this.$custom_ball_highlight)
+            this.$custom_ball_highlight.style.display = 'block';
+        // Remove animated highlight
+        if (this.$animated_highlight) this.$animated_highlight.remove();
+        if (this.$animated_ball_highlight)
+            this.$animated_ball_highlight.remove();
         this.render();
         this.trigger_event('reset', []);
     }
@@ -1263,7 +1299,6 @@ export default class Gantt {
                     ),
             );
 
-        // safety check to prevent infinite loop
         let c = 0;
         while (!el && c < this.config.step) {
             current = date_utils.add(current, -1, this.config.unit);
@@ -1307,7 +1342,6 @@ export default class Gantt {
                     ),
             );
 
-        // safety check to prevent infinite loop
         let c = 0;
         while (!el && c < this.config.step) {
             current = date_utils.add(current, -1, this.config.unit);
@@ -1394,7 +1428,7 @@ export default class Gantt {
         let is_resizing_left = false;
         let is_resizing_right = false;
         let parent_bar_id = null;
-        let bars = []; // instanceof Bar
+        let bars = [];
         this.bar_being_dragged = null;
 
         const action_in_progress = () =>
@@ -1507,7 +1541,6 @@ export default class Gantt {
                 dx = e.currentTarget.scrollLeft - x_on_scroll_start;
             }
 
-            // Calculate current scroll position's upper text
             this.current_date = date_utils.add(
                 this.gantt_start,
                 (e.currentTarget.scrollLeft / this.config.column_width) *
@@ -1524,7 +1557,6 @@ export default class Gantt {
                 (el) => el.textContent === current_upper,
             );
 
-            // Recalculate for smoother experience
             this.current_date = date_utils.add(
                 this.gantt_start,
                 ((e.currentTarget.scrollLeft + $el.clientWidth) /
@@ -1819,7 +1851,6 @@ export default class Gantt {
             return task.id === id;
         });
     }
-
     get_bar(id) {
         return this.bars.find((bar) => {
             return bar.task.id === id;
@@ -1848,12 +1879,6 @@ export default class Gantt {
         }
     }
 
-    /**
-     * Gets the oldest starting date from the list of tasks
-     *
-     * @returns Date
-     * @memberof Gantt
-     */
     get_oldest_starting_date() {
         if (!this.tasks.length) return new Date();
         return this.tasks
@@ -1863,11 +1888,6 @@ export default class Gantt {
             );
     }
 
-    /**
-     * Clear all elements from the parent svg element
-     *
-     * @memberof Gantt
-     */
     clear() {
         this.$svg.innerHTML = '';
         this.$header?.remove?.();
