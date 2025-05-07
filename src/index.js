@@ -861,7 +861,6 @@ export default class Gantt {
             createSVG('rect', {
                 x: diff * this.config.column_width,
                 y: this.config.header_height,
-
                 width: this.config.column_width,
                 height: height,
                 class: 'ignored-bar',
@@ -1083,6 +1082,7 @@ export default class Gantt {
         } else {
             // Stop player interval and animation
             clearInterval(this.player_interval);
+            this.player_interval = null;
             if (this.scrollAnimationFrame) {
                 cancelAnimationFrame(this.scrollAnimationFrame);
                 this.scrollAnimationFrame = null;
@@ -1111,12 +1111,14 @@ export default class Gantt {
     }
 
     reset_play() {
+        console.log('reset_play called');
         this.config.custom_marker_date = new Date(
             this.options.custom_marker_init_date,
         );
         this.options.player_state = false;
         this.overlapping_tasks.clear();
         clearInterval(this.player_interval);
+        this.player_interval = null;
         if (this.scrollAnimationFrame) {
             cancelAnimationFrame(this.scrollAnimationFrame);
             this.scrollAnimationFrame = null;
@@ -1164,6 +1166,7 @@ export default class Gantt {
         for (let cls of classes.split(' ')) $el.classList.add(cls);
         if (top !== undefined) $el.style.top = top + 'px';
         if (left !== undefined) $el.style.left = left + 'px';
+
         if (id) $el.id = id;
         if (width) $el.style.width = width + 'px';
         if (height) $el.style.height = height + 'px';
@@ -1398,6 +1401,28 @@ export default class Gantt {
     }
 
     player_update() {
+        console.log('player_update called', {
+            player_state: this.options.player_state,
+            custom_marker_date: this.config.custom_marker_date,
+            player_end_date: this.config.player_end_date,
+        });
+
+        // Exit if player is not active
+        if (!this.options.player_state) {
+            console.log('player_update exited: player_state is false');
+            return;
+        }
+
+        // Check if we've reached or passed the end date
+        if (
+            this.config.player_end_date &&
+            this.config.custom_marker_date >= this.config.player_end_date
+        ) {
+            console.log('player_update: reached player_end_date, stopping');
+            this.handle_animation_end();
+            return;
+        }
+
         // Increment custom marker date
         this.config.custom_marker_date = date_utils.add(
             this.config.custom_marker_date,
@@ -1480,9 +1505,19 @@ export default class Gantt {
     }
 
     start_scroll_animation(startLeft) {
+        console.log('start_scroll_animation called', { startLeft });
+
         // Cancel any existing animation frame
         if (this.scrollAnimationFrame) {
             cancelAnimationFrame(this.scrollAnimationFrame);
+            this.scrollAnimationFrame = null;
+            console.log('Canceled existing scrollAnimationFrame');
+        }
+
+        // Exit if player is not active
+        if (!this.options.player_state) {
+            console.log('start_scroll_animation exited: player_state is false');
+            return;
         }
 
         const animationDuration = (this.options.player_interval || 1000) / 1000;
@@ -1496,6 +1531,18 @@ export default class Gantt {
         const offset = viewportWidth / 6;
 
         const animateScroll = (currentTime) => {
+            console.log('animateScroll running', {
+                currentTime,
+                player_state: this.options.player_state,
+            });
+
+            // Exit if player is not active
+            if (!this.options.player_state) {
+                console.log('animateScroll exited: player_state is false');
+                this.scrollAnimationFrame = null;
+                return;
+            }
+
             const elapsed = (currentTime - startTime) / 1000; // Time in seconds
             const progress = Math.min(elapsed / animationDuration, 1); // Animation progress [0,1]
             const currentLeft = startLeft + moveDistance * progress; // Current highlight position
@@ -1524,6 +1571,10 @@ export default class Gantt {
                     requestAnimationFrame(animateScroll);
             } else {
                 // Animation complete or end date reached
+                console.log('animateScroll stopping', {
+                    progress,
+                    isBeyondEnd,
+                });
                 this.scrollAnimationFrame = null;
                 if (isBeyondEnd) {
                     this.handle_animation_end();
@@ -1533,23 +1584,48 @@ export default class Gantt {
 
         // Start animation
         this.scrollAnimationFrame = requestAnimationFrame(animateScroll);
+        console.log('Started new scrollAnimationFrame');
     }
 
     handle_animation_end() {
+        console.log('handle_animation_end called', {
+            player_state: this.options.player_state,
+            custom_marker_date: this.config.custom_marker_date,
+        });
+
         try {
+            // Clear intervals and animation frames
+            if (this.player_interval) {
+                clearInterval(this.player_interval);
+                this.player_interval = null;
+                console.log('Cleared player_interval');
+            }
+            if (this.scrollAnimationFrame) {
+                cancelAnimationFrame(this.scrollAnimationFrame);
+                this.scrollAnimationFrame = null;
+                console.log('Cleared scrollAnimationFrame');
+            }
+
             if (this.options.player_loop) {
                 // Reset to initial date and continue
                 this.config.custom_marker_date = new Date(
                     this.options.custom_marker_init_date,
                 );
                 this.overlapping_tasks.clear();
+                console.log('Loop mode: resetting custom_marker_date');
                 this.render();
-                this.player_update();
+                if (this.options.player_state) {
+                    this.player_interval = setInterval(
+                        this.player_update.bind(this),
+                        this.options.player_interval || 1000,
+                    );
+                    console.log('Restarted player_interval for loop');
+                }
             } else {
                 // Stop player
                 this.options.player_state = false;
                 this.overlapping_tasks.clear();
-                clearInterval(this.player_interval);
+                console.log('Stopping player, player_state set to false');
 
                 // Update button
                 if (this.$player_button) {
@@ -1561,21 +1637,27 @@ export default class Gantt {
                     }
                 }
 
-                // Safely manage highlights
+                // Clear animations
                 if (this.$animated_highlight) {
+                    this.$animated_highlight.style.animation = 'none';
                     this.$animated_highlight.remove();
                     this.$animated_highlight = null;
+                    console.log('Removed animated_highlight');
                 }
                 if (this.$animated_ball_highlight) {
+                    this.$animated_ball_highlight.style.animation = 'none';
                     this.$animated_ball_highlight.remove();
                     this.$animated_ball_highlight = null;
+                    console.log('Removed animated_ball_highlight');
                 }
 
                 // Ensure custom highlight is at the correct position
                 if (
                     this.config.custom_marker_date &&
                     this.gantt_start &&
-                    this.gantt_end
+                    this.gantt_end &&
+                    this.config.custom_marker_date >= this.gantt_start &&
+                    this.config.custom_marker_date <= this.gantt_end
                 ) {
                     this.highlight_custom(this.config.custom_marker_date);
                     if (this.$custom_highlight) {
@@ -1584,11 +1666,19 @@ export default class Gantt {
                     if (this.$custom_ball_highlight) {
                         this.$custom_ball_highlight.style.display = 'block';
                     }
+                    console.log('Restored custom highlight');
+                } else {
+                    console.warn('Invalid custom_marker_date for highlight', {
+                        custom_marker_date: this.config.custom_marker_date,
+                        gantt_start: this.gantt_start,
+                        gantt_end: this.gantt_end,
+                    });
                 }
 
                 // Re-render to update chart
                 this.render();
                 this.trigger_event('finish', []);
+                console.log('Triggered finish event');
             }
         } catch (error) {
             console.error('Error in handle_animation_end:', error);
