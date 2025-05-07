@@ -948,8 +948,10 @@ export default class Gantt {
                 // Hide custom highlight when playing
                 if (this.$custom_highlight)
                     this.$custom_highlight.style.display = 'none';
+                this.$custom_ball_highlight.remove();
                 if (this.$custom_ball_highlight)
                     this.$custom_ball_highlight.style.display = 'none';
+                this.$custom_ball_highlight.remove();
             } catch (e) {
                 console.error('Error playing animated highlight:', e);
             }
@@ -957,6 +959,10 @@ export default class Gantt {
             // Show custom highlight when paused
             if (this.$custom_highlight)
                 this.$custom_highlight.style.display = 'block';
+            this.highlight_custom(
+                this.config.custom_marker_date,
+                highlightDimensionsCustom.dateObj,
+            );
             if (this.$custom_ball_highlight)
                 this.$custom_ball_highlight.style.display = 'block';
             // Remove animated highlight when paused
