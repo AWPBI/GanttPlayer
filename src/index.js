@@ -878,16 +878,16 @@ export default class Gantt {
             );
         }
         if (!highlightDimensions || !highlightDimensionsCustom) return;
-        if (this.options.player_state) {
-            try {
-                this.play_animated_highlight(
-                    highlightDimensionsCustom.left,
-                    highlightDimensionsCustom.dateObj,
-                );
-            } catch (e) {
-                console.error('Error playing animated highlight:', e);
-            }
-        }
+        // if (this.options.player_state) {
+        //     try {
+        //         this.play_animated_highlight(
+        //             highlightDimensionsCustom.left,
+        //             highlightDimensionsCustom.dateObj,
+        //         );
+        //     } catch (e) {
+        //         console.error('Error playing animated highlight:', e);
+        //     }
+        // }
     }
 
     create_el({ left, top, width, height, id, classes, append_to, type }) {
