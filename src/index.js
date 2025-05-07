@@ -826,6 +826,10 @@ export default class Gantt {
     }
 
     make_grid_highlights() {
+        console.log(
+            'this.play_animated_highlight:',
+            this.play_animated_highlight,
+        );
         this.highlight_holidays();
         this.config.ignored_positions = [];
 
@@ -876,7 +880,11 @@ export default class Gantt {
             highlightDimensionsCustom = this.highlight_custom(
                 this.config.custom_marker_date,
             );
-            if (this.play_animated_highlight && highlightDimensionsCustom) {
+            if (
+                this.options.player_state &&
+                this.play_animated_highlight &&
+                highlightDimensionsCustom
+            ) {
                 this.play_animated_highlight(
                     highlightDimensionsCustom.left,
                     highlightDimensionsCustom.dateObj,
