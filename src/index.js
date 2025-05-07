@@ -763,42 +763,67 @@ export default class Gantt {
     }
 
     play_animated_highlight(left, dateObj) {
-        if (!dateObj || isNaN(left)) {
-            console.warn('Invalid left or dateObj:', { left, dateObj });
-            // Fallback: Calculate left based on custom_marker_date
-            const diff = date_utils.diff(
-                this.config.custom_marker_date,
-                this.gantt_start,
-                this.config.unit,
-            );
-            left = (diff / this.config.step) * this.config.column_width;
-            dateObj = this.config.custom_marker_date;
-            console.log('Using fallback left:', left);
+        // Validate and adjust left position
+        let adjustedLeft = left;
+        if (!dateObj || isNaN(left) || left === 0) {
+            const customHighlight =
+                this.$container.querySelector('.custom-highlight');
+            if (customHighlight) {
+                adjustedLeft = parseFloat(customHighlight.style.left) || 0;
+                console.log('Using custom-highlight left:', adjustedLeft);
+            } else {
+                // Fallback to calculated left
+                const diff = date_utils.diff(
+                    this.config.custom_marker_date,
+                    this.gantt_start,
+                    this.config.unit,
+                );
+                adjustedLeft =
+                    (diff / this.config.step) * this.config.column_width;
+                console.log('Using calculated left:', adjustedLeft);
+            }
+            dateObj = this.config.custom_marker_date || new Date();
         }
 
         console.log(
             'play_animated_highlight called with left:',
-            left,
+            adjustedLeft,
             'dateObj:',
             dateObj,
         );
+
+        // Get height from custom-highlight
+        let highlightHeight = this.grid_height - this.config.header_height; // Default
+        const customHighlight =
+            this.$container.querySelector('.custom-highlight');
+        if (customHighlight) {
+            const computedStyle = getComputedStyle(customHighlight);
+            highlightHeight = parseFloat(computedStyle.height);
+            console.log('Using custom-highlight height:', highlightHeight);
+        } else {
+            console.warn(
+                'custom-highlight not found, using default height:',
+                highlightHeight,
+            );
+        }
 
         // Create animated highlight bar if not exists
         if (!this.$animated_highlight) {
             this.$animated_highlight = this.create_el({
                 top: this.config.header_height,
-                left: left,
+                left: adjustedLeft,
                 width: 2,
-                height: this.grid_height - this.config.header_height,
+                height: highlightHeight,
                 classes: 'animated-highlight',
                 append_to: this.$container,
                 style: 'background: var(--g-custom-highlight); z-index: 999;',
             });
         } else {
-            this.$animated_highlight.style.left = `${left}px`;
+            this.$animated_highlight.style.left = `${adjustedLeft}px`;
+            this.$animated_highlight.style.height = `${highlightHeight}px`;
         }
 
-        // Log computed height and CSS variables
+        // Debug height and CSS variables
         const computedStyle = getComputedStyle(this.$animated_highlight);
         const height = computedStyle.height;
         const gridHeight = getComputedStyle(
@@ -816,13 +841,14 @@ export default class Gantt {
             '--gv-upper-header-height': upperHeaderHeight,
             'this.grid_height': this.grid_height,
             'this.config.header_height': this.config.header_height,
+            custom_highlight_height: highlightHeight,
         });
 
         // Create animated highlight ball if not exists
         if (!this.$animated_ball_highlight) {
             this.$animated_ball_highlight = this.create_el({
                 top: this.config.header_height - 6,
-                left: left - 2, // Center on 2px bar
+                left: adjustedLeft - 2, // Center on 2px bar
                 width: 6,
                 height: 6,
                 classes: 'animated-ball-highlight',
@@ -830,7 +856,7 @@ export default class Gantt {
                 style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
             });
         } else {
-            this.$animated_ball_highlight.style.left = `${left - 2}px`;
+            this.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
         }
 
         // Calculate animation duration
@@ -853,7 +879,7 @@ export default class Gantt {
         );
 
         return {
-            left,
+            left: adjustedLeft,
             dateObj,
         };
     }
