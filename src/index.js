@@ -1422,55 +1422,86 @@ export default class Gantt {
     scroll_to_latest_task() {
         if (!this.tasks.length) return;
 
-        // Find the task with the highest index (latest added)
-        const latestTask = this.tasks.reduce(
-            (latest, task) => (task._index > latest._index ? task : latest),
-            this.tasks[0],
+        // Find tasks active at the initial custom_marker_date (or use earliest start)
+        const currentDate = this.config.custom_marker_date || this.gantt_start;
+        const activeTasks = this.tasks.filter(
+            (task) => task._start <= currentDate && currentDate <= task._end,
         );
+
+        // If no active tasks, fall back to the task with the earliest start
+        const targetTask = activeTasks.length
+            ? activeTasks.reduce(
+                  (max, task) => (task._index > max._index ? task : max),
+                  activeTasks[0],
+              )
+            : this.tasks.reduce(
+                  (earliest, task) =>
+                      task._start < earliest._start ? task : earliest,
+                  this.tasks[0],
+              );
 
         // Find the corresponding bar-wrapper element
         const barWrapper = this.$svg.querySelector(
-            `.bar-wrapper[data-id="${latestTask.id}"]`,
+            `.bar-wrapper[data-id="${targetTask.id}"]`,
         );
 
+        let taskY;
         if (barWrapper) {
             // Get the y attribute from the bar-wrapper
-            const taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
-
-            // Adjust for header height to align with scroll container's coordinate system
-            const adjustedY = taskY - this.config.header_height;
-
-            // Calculate the desired scroll position to position the task near the top of the viewport
-            const viewportHeight = this.$container.clientHeight;
-            const offset = this.options.padding; // Small offset from top for visibility
-            let targetScrollTop = adjustedY - offset;
-
-            // Ensure scrollTop is within bounds
-            const maxScrollTop = this.$container.scrollHeight - viewportHeight;
-            const clampedScrollTop = Math.max(
-                0,
-                Math.min(targetScrollTop, maxScrollTop),
-            );
-
-            // Scroll to the calculated position
-            this.$container.scrollTo({
-                top: clampedScrollTop,
-                behavior: 'smooth',
-            });
-
-            console.log('scroll_to_latest_task', {
-                taskId: latestTask.id,
-                taskY,
-                adjustedY,
-                viewportHeight,
-                offset,
-                targetScrollTop,
-                clampedScrollTop,
-                maxScrollTop,
-            });
+            taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+            // Validate taskY; if 0, calculate based on index
+            if (taskY === 0) {
+                console.warn(
+                    `Invalid y attribute for task "${targetTask.id}", calculating from index`,
+                );
+                taskY =
+                    this.config.header_height +
+                    targetTask._index *
+                        (this.options.bar_height + this.options.padding);
+            }
         } else {
-            console.warn(`Bar wrapper for task "${latestTask.id}" not found`);
+            // Fallback: calculate y based on task index
+            console.warn(
+                `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
+            );
+            taskY =
+                this.config.header_height +
+                targetTask._index *
+                    (this.options.bar_height + this.options.padding);
         }
+
+        // Adjust for header height to align with scroll container's coordinate system
+        const adjustedY = taskY - this.config.header_height;
+
+        // Calculate the desired scroll position to position the task near the top of the viewport
+        const viewportHeight = this.$container.clientHeight;
+        const offset = this.options.padding; // Small offset from top for visibility
+        let targetScrollTop = adjustedY - offset;
+
+        // Ensure scrollTop is within bounds
+        const maxScrollTop = this.$container.scrollHeight - viewportHeight;
+        const clampedScrollTop = Math.max(
+            0,
+            Math.min(targetScrollTop, maxScrollTop),
+        );
+
+        // Scroll to the calculated position
+        this.$container.scrollTo({
+            top: clampedScrollTop,
+            behavior: 'smooth',
+        });
+
+        console.log('scroll_to_latest_task', {
+            taskId: targetTask.id,
+            taskY,
+            adjustedY,
+            viewportHeight,
+            offset,
+            targetScrollTop,
+            clampedScrollTop,
+            maxScrollTop,
+            activeTaskCount: activeTasks.length,
+        });
     }
 
     player_update() {
@@ -1629,58 +1660,88 @@ export default class Gantt {
             // Update horizontal scroll position
             container.scrollLeft = targetScroll;
 
-            // Update vertical scroll to track the latest task
+            // Update vertical scroll to track the active task
             if (this.tasks.length) {
-                // Find the task with the highest index (latest added)
-                const latestTask = this.tasks.reduce(
-                    (latest, task) =>
-                        task._index > latest._index ? task : latest,
-                    this.tasks[0],
+                // Find tasks active at the current custom_marker_date
+                const currentDate = this.config.custom_marker_date;
+                const activeTasks = this.tasks.filter(
+                    (task) =>
+                        task._start <= currentDate && currentDate <= task._end,
                 );
+
+                // If no active tasks, fall back to the task with the earliest start
+                const targetTask = activeTasks.length
+                    ? activeTasks.reduce(
+                          (max, task) =>
+                              task._index > max._index ? task : max,
+                          activeTasks[0],
+                      )
+                    : this.tasks.reduce(
+                          (earliest, task) =>
+                              task._start < earliest._start ? task : earliest,
+                          this.tasks[0],
+                      );
 
                 // Find the corresponding bar-wrapper element
                 const barWrapper = this.$svg.querySelector(
-                    `.bar-wrapper[data-id="${latestTask.id}"]`,
+                    `.bar-wrapper[data-id="${targetTask.id}"]`,
                 );
 
+                let taskY;
                 if (barWrapper) {
                     // Get the y attribute from the bar-wrapper
-                    const taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
-
-                    // Adjust for header height to align with scroll container's coordinate system
-                    const adjustedY = taskY - this.config.header_height;
-
-                    // Calculate the desired scroll position to position the task near the top of the viewport
-                    const viewportHeight = container.clientHeight;
-                    const verticalOffset = this.options.padding; // Small offset from top for visibility
-                    let targetScrollTop = adjustedY - verticalOffset;
-
-                    // Ensure scrollTop is within bounds
-                    const maxScrollTop =
-                        container.scrollHeight - viewportHeight;
-                    const clampedScrollTop = Math.max(
-                        0,
-                        Math.min(targetScrollTop, maxScrollTop),
-                    );
-
-                    // Update vertical scroll position
-                    container.scrollTop = clampedScrollTop;
-
-                    console.log('animateScroll vertical scroll', {
-                        taskId: latestTask.id,
-                        taskY,
-                        adjustedY,
-                        viewportHeight,
-                        verticalOffset,
-                        targetScrollTop,
-                        clampedScrollTop,
-                        maxScrollTop,
-                    });
+                    taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+                    // Validate taskY; if 0, calculate based on index
+                    if (taskY === 0) {
+                        console.warn(
+                            `Invalid y attribute for task "${targetTask.id}", calculating from index`,
+                        );
+                        taskY =
+                            this.config.header_height +
+                            targetTask._index *
+                                (this.options.bar_height +
+                                    this.options.padding);
+                    }
                 } else {
+                    // Fallback: calculate y based on task index
                     console.warn(
-                        `Bar wrapper for task "${latestTask.id}" not found`,
+                        `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
                     );
+                    taskY =
+                        this.config.header_height +
+                        targetTask._index *
+                            (this.options.bar_height + this.options.padding);
                 }
+
+                // Adjust for header height to align with scroll container's coordinate system
+                const adjustedY = taskY - this.config.header_height;
+
+                // Calculate the desired scroll position to position the task near the top of the viewport
+                const viewportHeight = container.clientHeight;
+                const verticalOffset = this.options.padding; // Small offset from top for visibility
+                let targetScrollTop = adjustedY - verticalOffset;
+
+                // Ensure scrollTop is within bounds
+                const maxScrollTop = container.scrollHeight - viewportHeight;
+                const clampedScrollTop = Math.max(
+                    0,
+                    Math.min(targetScrollTop, maxScrollTop),
+                );
+
+                // Update vertical scroll position
+                container.scrollTop = clampedScrollTop;
+
+                console.log('animateScroll vertical scroll', {
+                    taskId: targetTask.id,
+                    taskY,
+                    adjustedY,
+                    viewportHeight,
+                    verticalOffset,
+                    targetScrollTop,
+                    clampedScrollTop,
+                    maxScrollTop,
+                    activeTaskCount: activeTasks.length,
+                });
             }
 
             // Check if animation should continue
