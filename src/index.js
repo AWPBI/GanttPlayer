@@ -1882,13 +1882,13 @@ export default class Gantt {
                 // Clear animations
                 if (this.$animated_highlight) {
                     this.$animated_highlight.style.animation = 'none';
-                    this.$animated_highlight.remove();
+                    // this.$animated_highlight.remove();
                     this.$animated_highlight = null;
                     console.log('Removed animated_highlight');
                 }
                 if (this.$animated_ball_highlight) {
                     this.$animated_ball_highlight.style.animation = 'none';
-                    this.$animated_ball_highlight.remove();
+                    // this.$animated_ball_highlight.remove();
                     this.$animated_ball_highlight = null;
                     console.log('Removed animated_ball_highlight');
                 }
