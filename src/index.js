@@ -66,6 +66,28 @@ export default class Gantt {
             classes: 'popup-wrapper',
             append_to: this.$container,
         });
+
+        // Initialize header elements to prevent undefined errors in clear()
+        this.$header = this.create_el({
+            classes: 'grid-header',
+            append_to: this.$container,
+        });
+        this.$upper_header = this.create_el({
+            classes: 'upper-header',
+            append_to: this.$header,
+        });
+        this.$lower_header = this.create_el({
+            classes: 'lower-header',
+            append_to: this.$header,
+        });
+        this.$side_header = this.create_el({
+            classes: 'side-header',
+            append_to: this.$upper_header,
+        });
+        this.$extras = this.create_el({
+            classes: 'extras',
+            append_to: this.$container,
+        });
     }
 
     setup_options(options) {
@@ -404,10 +426,6 @@ export default class Gantt {
                 append_to: this.$svg,
             });
         }
-        this.$extras = this.create_el({
-            classes: 'extras',
-            append_to: this.$container,
-        });
         this.$adjust = this.create_el({
             classes: 'adjust hide',
             append_to: this.$extras,
@@ -483,26 +501,11 @@ export default class Gantt {
     }
 
     make_grid_header() {
-        this.$header = this.create_el({
-            width: this.dates.length * this.config.column_width,
-            classes: 'grid-header',
-            append_to: this.$container,
-        });
-
-        this.$upper_header = this.create_el({
-            classes: 'upper-header',
-            append_to: this.$header,
-        });
-        this.$lower_header = this.create_el({
-            classes: 'lower-header',
-            append_to: this.$header,
-        });
+        this.$header.style.width =
+            this.dates.length * this.config.column_width + 'px';
     }
 
     make_side_header() {
-        this.$side_header = this.create_el({ classes: 'side-header' });
-        this.$upper_header.prepend(this.$side_header);
-
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
             $select.classList.add('viewmode-select');
