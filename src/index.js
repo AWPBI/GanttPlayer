@@ -811,18 +811,18 @@ export default class Gantt {
             this.$custom_ball_highlight.style.display = 'block';
         }
 
-        // if (date >= this.gantt_end) {
-        //     console.warn('Custom highlight date is out of bounds:', {
-        //         date,
-        //         gantt_end: this.gantt_end,
-        //     });
-        //     if (this.$options.player_loop) {
-        //         this.reset_play();
-        //         this.toggle_play();
-        //     } else {
-        //         this.trigger_event('pause', []);
-        //     }
-        // }
+        if (date >= this.gantt_end) {
+            console.warn('Custom highlight date is out of bounds:', {
+                date,
+                gantt_end: this.gantt_end,
+            });
+            if (this.$options.player_loop) {
+                this.trigger_event('reset', []);
+                this.trigger_event('play', []);
+            } else {
+                this.trigger_event('pause', []);
+            }
+        }
 
         return { left, dateObj: date };
     }
@@ -1782,7 +1782,7 @@ export default class Gantt {
                 // Re-render the chart
                 this.render();
 
-                // Recalculate the initial position for the animation
+                // Recreate animated highlights after render
                 const diff_in_units = date_utils.diff(
                     this.config.custom_marker_date,
                     this.gantt_start,
@@ -1791,9 +1791,7 @@ export default class Gantt {
                 const newLeft =
                     (diff_in_units / this.config.step) *
                     this.config.column_width;
-
                 if (this.options.player_state) {
-                    // Restart the animation from the new position
                     this.play_animated_highlight(
                         newLeft,
                         this.config.custom_marker_date,
@@ -2152,7 +2150,6 @@ export default class Gantt {
             $el = this.upperTexts.find(
                 (el) => el.textContent === current_upper,
             );
-
             if ($el !== this.$current) {
                 if (this.$current)
                     this.$current.classList.remove('current-upper');
@@ -2421,69 +2418,35 @@ export default class Gantt {
         if (typeof modes === 'string') {
             return this.config.view_mode.name === modes;
         }
-
-        if (Array.isArray(modes)) {
-            return modes.some(view_is);
-        }
-
-        return this.config.view_mode.name === modes.name;
-    }
-
-    get_task(id) {
-        return this.tasks.find((task) => {
-            return task.id === id;
-        });
-    }
-
-    get_bar(id) {
-        return this.bars.find((bar) => {
-            return bar.task.id === id;
-        });
-    }
-
-    show_popup(opts) {
-        if (this.options.popup === false) return;
-        if (!this.popup) {
-            this.popup = new Popup(
-                this.$popup_wrapper,
-                this.options.popup,
-                this,
-            );
-        }
-        this.popup.show(opts);
-    }
-
-    hide_popup() {
-        this.popup && this.popup.hide();
-    }
-
-    trigger_event(event, args) {
-        if (this.options['on_' + event]) {
-            this.options['on_' + event].apply(this, args);
-        }
-    }
-
-    get_oldest_starting_date() {
-        if (!this.tasks.length) return new Date();
-        return this.tasks
-            .map((task) => task._start)
-            .reduce((prev_date, cur_date) =>
-                cur_date <= prev_date ? cur_date : prev_date,
-            );
+        return modes.some(this.view_is, this);
     }
 
     clear() {
         this.$svg.innerHTML = '';
-        this.$header?.remove?.();
-        this.$side_header?.remove?.();
-        this.$current_highlight?.remove?.();
-        this.$custom_highlight?.remove?.();
-        this.$current_ball_highlight?.remove?.();
-        this.$custom_ball_highlight?.remove?.();
-        this.$animated_highlight?.remove?.();
-        this.$animated_ball_highlight?.remove?.();
-        this.$extras?.remove?.();
-        this.popup?.hide?.();
+        this.$header.innerHTML = '';
+        this.$lower_header.innerHTML = '';
+        this.$upper_header.innerHTML = '';
+        this.$extras.innerHTML = '';
+        this.$side_header.innerHTML = '';
+        this.$popup_wrapper.innerHTML = '';
+    }
+
+    trigger_event(event, args) {
+        if (this.options['on_' + event]) {
+            this.options['on_' + event].apply(null, args);
+        }
+    }
+
+    get_task(id) {
+        return this.tasks.find((task) => task.id === id);
+    }
+
+    get_bar(id) {
+        return this.bars.find((bar) => bar.task.id === id);
+    }
+
+    hide_popup() {
+        if (this.popup) this.popup.hide();
     }
 }
 
