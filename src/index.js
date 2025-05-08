@@ -502,7 +502,7 @@ export default class Gantt {
 
     make_side_header() {
         this.$side_header = this.create_el({ classes: 'side-header' });
-        this.$upper_header.prepend(this.$side_header);
+        this.$header.prepend(this.$side_header);
 
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
