@@ -1428,15 +1428,35 @@ export default class Gantt {
             this.tasks[0],
         );
 
-        // Calculate the vertical position of the latest task
-        const rowHeight = this.options.bar_height + this.options.padding;
-        const taskY = this.config.header_height + latestTask._index * rowHeight;
+        // Find the corresponding bar-wrapper element
+        const barWrapper = this.$svg.querySelector(
+            `.bar-wrapper[data-id="${latestTask.id}"]`,
+        );
 
-        // Scroll to the calculated position
-        this.$container.scrollTo({
-            top: taskY - this.config.header_height, // Adjust to keep task in view
-            behavior: 'smooth',
-        });
+        if (barWrapper) {
+            // Get the y attribute from the bar-wrapper
+            const taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+
+            // Calculate the desired scroll position to center the task in the viewport
+            const viewportHeight = this.$container.clientHeight;
+            const targetScrollTop =
+                taskY - viewportHeight / 2 + this.options.bar_height / 2;
+
+            // Ensure scrollTop is within bounds
+            const maxScrollTop = this.$container.scrollHeight - viewportHeight;
+            const clampedScrollTop = Math.max(
+                0,
+                Math.min(targetScrollTop, maxScrollTop),
+            );
+
+            // Scroll to the calculated position
+            this.$container.scrollTo({
+                top: clampedScrollTop,
+                behavior: 'smooth',
+            });
+        } else {
+            console.warn(`Bar wrapper for task "${latestTask.id}" not found`);
+        }
     }
 
     player_update() {
@@ -1604,14 +1624,37 @@ export default class Gantt {
                     this.tasks[0],
                 );
 
-                // Calculate the vertical position of the latest task
-                const rowHeight =
-                    this.options.bar_height + this.options.padding;
-                const taskY =
-                    this.config.header_height + latestTask._index * rowHeight;
+                // Find the corresponding bar-wrapper element
+                const barWrapper = this.$svg.querySelector(
+                    `.bar-wrapper[data-id="${latestTask.id}"]`,
+                );
 
-                // Update vertical scroll position
-                container.scrollTop = taskY - this.config.header_height;
+                if (barWrapper) {
+                    // Get the y attribute from the bar-wrapper
+                    const taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+
+                    // Calculate the desired scroll position to center the task in the viewport
+                    const viewportHeight = container.clientHeight;
+                    const targetScrollTop =
+                        taskY -
+                        viewportHeight / 2 +
+                        this.options.bar_height / 2;
+
+                    // Ensure scrollTop is within bounds
+                    const maxScrollTop =
+                        container.scrollHeight - viewportHeight;
+                    const clampedScrollTop = Math.max(
+                        0,
+                        Math.min(targetScrollTop, maxScrollTop),
+                    );
+
+                    // Update vertical scroll position
+                    container.scrollTop = clampedScrollTop;
+                } else {
+                    console.warn(
+                        `Bar wrapper for task "${latestTask.id}" not found`,
+                    );
+                }
             }
 
             // Check if animation should continue
@@ -2206,7 +2249,10 @@ export default class Gantt {
             }
 
             $bar_progress.setAttribute('width', $bar_progress.owidth + dx);
-            $.attr(bar.$handle_progress, 'cx', $bar_progress.getEndX());
+            $.attr(
+                bar.$handle_progression,
+                $.attr(bar.$handle_progress, 'cx', $bar_progress.getEndX()),
+            );
 
             $bar_progress.finaldx = dx;
         });
