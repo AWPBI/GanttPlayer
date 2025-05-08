@@ -1592,8 +1592,27 @@ export default class Gantt {
             // Clamp scroll position to chart bounds
             targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
 
-            // Update scroll position
+            // Update horizontal scroll position
             container.scrollLeft = targetScroll;
+
+            // Update vertical scroll to track the latest task
+            if (this.tasks.length) {
+                // Find the task with the highest index (latest added)
+                const latestTask = this.tasks.reduce(
+                    (latest, task) =>
+                        task._index > latest._index ? task : latest,
+                    this.tasks[0],
+                );
+
+                // Calculate the vertical position of the latest task
+                const rowHeight =
+                    this.options.bar_height + this.options.padding;
+                const taskY =
+                    this.config.header_height + latestTask._index * rowHeight;
+
+                // Update vertical scroll position
+                container.scrollTop = taskY - this.config.header_height;
+            }
 
             // Check if animation should continue
             const res = this.get_closest_date_to(
