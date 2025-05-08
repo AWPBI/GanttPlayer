@@ -61,6 +61,12 @@ export default class Gantt {
             append_to: this.$svg.parentElement,
         });
 
+        // Create controls-header for side-header
+        this.$controls_header = this.create_el({
+            classes: 'controls-header',
+            append_to: this.$container,
+        });
+
         this.$container.appendChild(this.$svg);
         this.$popup_wrapper = this.create_el({
             classes: 'popup-wrapper',
@@ -90,6 +96,7 @@ export default class Gantt {
             ignored_dates: [],
             ignored_positions: [],
             extend_by_units: 10,
+            controls_header_height: 40, // Height of the new controls-header
         };
 
         if (this.options.player_button) {
@@ -433,6 +440,7 @@ export default class Gantt {
         const grid_width = this.dates.length * this.config.column_width;
         const grid_height = Math.max(
             this.config.header_height +
+                this.config.controls_header_height + // Add controls-header height
                 this.options.padding +
                 (this.options.bar_height + this.options.padding) *
                     this.tasks.length -
@@ -466,9 +474,10 @@ export default class Gantt {
         const row_width = this.dates.length * this.config.column_width;
         const row_height = this.options.bar_height + this.options.padding;
 
-        let y = this.config.header_height;
+        let y = this.config.header_height + this.config.controls_header_height;
         for (
-            let y = this.config.header_height;
+            let y =
+                this.config.header_height + this.config.controls_header_height;
             y < this.grid_height;
             y += row_height
         ) {
@@ -488,6 +497,7 @@ export default class Gantt {
             width: this.dates.length * this.config.column_width,
             classes: 'grid-header',
             append_to: this.$container,
+            style: `top: ${this.config.controls_header_height}px;`, // Position below controls-header
         });
 
         this.$upper_header = this.create_el({
@@ -502,7 +512,7 @@ export default class Gantt {
 
     make_side_header() {
         this.$side_header = this.create_el({ classes: 'side-header' });
-        this.$header.prepend(this.$side_header);
+        this.$controls_header.appendChild(this.$side_header); // Append to controls-header
 
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
@@ -574,21 +584,28 @@ export default class Gantt {
     make_grid_ticks() {
         if (this.options.lines === 'none') return;
         let tick_x = 0;
-        let tick_y = this.config.header_height;
-        let tick_height = this.grid_height - this.config.header_height;
+        let tick_y =
+            this.config.header_height + this.config.controls_header_height;
+        let tick_height =
+            this.grid_height -
+            this.config.header_height -
+            this.config.controls_header_height;
 
         let $lines_layer = createSVG('g', {
             class: 'lines_layer',
             append_to: this.layers.grid,
         });
 
-        let row_y = this.config.header_height;
+        let row_y =
+            this.config.header_height + this.config.controls_header_height;
 
         const row_width = this.dates.length * this.config.column_width;
         const row_height = this.options.bar_height + this.options.padding;
         if (this.options.lines !== 'vertical') {
             for (
-                let y = this.config.header_height;
+                let y =
+                    this.config.header_height +
+                    this.config.controls_header_height;
                 y < this.grid_height;
                 y += row_height
             ) {
@@ -692,7 +709,10 @@ export default class Gantt {
                         ) /
                             this.config.step) *
                         this.config.column_width;
-                    const height = this.grid_height - this.config.header_height;
+                    const height =
+                        this.grid_height -
+                        this.config.header_height -
+                        this.config.controls_header_height;
                     const d_formatted = date_utils
                         .format(d, 'YYYY-MM-DD', this.options.language)
                         .replace(' ', '_');
@@ -706,7 +726,9 @@ export default class Gantt {
                     }
                     createSVG('rect', {
                         x: Math.round(x),
-                        y: this.config.header_height,
+                        y:
+                            this.config.header_height +
+                            this.config.controls_header_height,
                         width:
                             this.config.column_width /
                             date_utils.convert_scales(
@@ -742,14 +764,20 @@ export default class Gantt {
             (diff_in_units / this.config.step) * this.config.column_width;
 
         this.$current_highlight = this.create_el({
-            top: this.config.header_height,
+            top: this.config.header_height + this.config.controls_header_height,
             left,
-            height: this.grid_height - this.config.header_height,
+            height:
+                this.grid_height -
+                this.config.header_height -
+                this.config.controls_header_height,
             classes: 'current-highlight',
             append_to: this.$container,
         });
         this.$current_ball_highlight = this.create_el({
-            top: this.config.header_height - 6,
+            top:
+                this.config.header_height +
+                this.config.controls_header_height -
+                6,
             left: left - 2.5,
             width: 6,
             height: 6,
@@ -794,7 +822,9 @@ export default class Gantt {
         // Create or update custom highlight
         if (!this.$custom_highlight) {
             this.$custom_highlight = this.create_el({
-                top: this.config.header_height,
+                top:
+                    this.config.header_height +
+                    this.config.controls_header_height,
                 left,
                 width: 2,
                 height: gridHeight,
@@ -811,7 +841,10 @@ export default class Gantt {
         // Create or update custom ball highlight
         if (!this.$custom_ball_highlight) {
             this.$custom_ball_highlight = this.create_el({
-                top: this.config.header_height - 6,
+                top:
+                    this.config.header_height +
+                    this.config.controls_header_height -
+                    6,
                 left: left - 2,
                 width: 6,
                 height: 6,
@@ -879,7 +912,9 @@ export default class Gantt {
             this.config.ignored_positions.push(diff * this.config.column_width);
             createSVG('rect', {
                 x: diff * this.config.column_width,
-                y: this.config.header_height,
+                y:
+                    this.config.header_height +
+                    this.config.controls_header_height,
                 width: this.config.column_width,
                 height: height,
                 class: 'ignored-bar',
@@ -952,7 +987,9 @@ export default class Gantt {
         // Create animated highlight bar if not exists
         if (!this.$animated_highlight) {
             this.$animated_highlight = this.create_el({
-                top: this.config.header_height,
+                top:
+                    this.config.header_height +
+                    this.config.controls_header_height,
                 left: adjustedLeft,
                 width: 2,
                 height: gridHeight,
@@ -989,7 +1026,10 @@ export default class Gantt {
         // Create animated highlight ball if not exists
         if (!this.$animated_ball_highlight) {
             this.$animated_ball_highlight = this.create_el({
-                top: this.config.header_height - 6,
+                top:
+                    this.config.header_height +
+                    this.config.controls_header_height -
+                    6,
                 left: adjustedLeft - 2,
                 width: 6,
                 height: 6,
@@ -1458,6 +1498,7 @@ export default class Gantt {
                 );
                 taskY =
                     this.config.header_height +
+                    this.config.controls_header_height +
                     targetTask._index *
                         (this.options.bar_height + this.options.padding);
             }
@@ -1468,6 +1509,7 @@ export default class Gantt {
             );
             taskY =
                 this.config.header_height +
+                this.config.controls_header_height +
                 targetTask._index *
                     (this.options.bar_height + this.options.padding);
         }
@@ -1476,7 +1518,10 @@ export default class Gantt {
         this.lastTaskY = taskY;
 
         // Adjust for header height to align with scroll container's coordinate system
-        const adjustedY = taskY - this.config.header_height;
+        const adjustedY =
+            taskY -
+            this.config.header_height -
+            this.config.controls_header_height;
 
         // Calculate the desired scroll position to position the task near the top of the viewport
         const viewportHeight = this.$container.clientHeight;
@@ -1697,6 +1742,7 @@ export default class Gantt {
                             );
                             taskY =
                                 this.config.header_height +
+                                this.config.controls_header_height +
                                 targetTask._index *
                                     (this.options.bar_height +
                                         this.options.padding);
@@ -1708,6 +1754,7 @@ export default class Gantt {
                         );
                         taskY =
                             this.config.header_height +
+                            this.config.controls_header_height +
                             targetTask._index *
                                 (this.options.bar_height +
                                     this.options.padding);
@@ -1739,6 +1786,7 @@ export default class Gantt {
                             );
                             taskY =
                                 this.config.header_height +
+                                this.config.controls_header_height +
                                 targetTask._index *
                                     (this.options.bar_height +
                                         this.options.padding);
@@ -1749,6 +1797,7 @@ export default class Gantt {
                         );
                         taskY =
                             this.config.header_height +
+                            this.config.controls_header_height +
                             targetTask._index *
                                 (this.options.bar_height +
                                     this.options.padding);
@@ -1759,7 +1808,10 @@ export default class Gantt {
                 }
 
                 // Adjust for header height to align with scroll container's coordinate system
-                const adjustedY = taskY - this.config.header_height;
+                const adjustedY =
+                    taskY -
+                    this.config.header_height -
+                    this.config.controls_header_height;
 
                 // Calculate the desired scroll position to position the task near the top of the viewport
                 const viewportHeight = container.clientHeight;
