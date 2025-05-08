@@ -817,8 +817,8 @@ export default class Gantt {
                 gantt_end: this.gantt_end,
             });
             if (this.$options.player_loop) {
-                this.trigger_event('reset', []);
-                this.trigger_event('play', []);
+                this.reset_play();
+                this.toggle_play();
             } else {
                 this.trigger_event('pause', []);
             }
