@@ -61,12 +61,6 @@ export default class Gantt {
             append_to: this.$svg.parentElement,
         });
 
-        // Add controls header
-        this.$controls_header = this.create_el({
-            classes: 'controls-header',
-            append_to: this.$container,
-        });
-
         this.$container.appendChild(this.$svg);
         this.$popup_wrapper = this.create_el({
             classes: 'popup-wrapper',
@@ -96,7 +90,6 @@ export default class Gantt {
             ignored_dates: [],
             ignored_positions: [],
             extend_by_units: 10,
-            controls_header_height: 40, // Height of the new controls-header
         };
 
         if (this.options.player_button) {
@@ -495,7 +488,6 @@ export default class Gantt {
             width: this.dates.length * this.config.column_width,
             classes: 'grid-header',
             append_to: this.$container,
-            style: `top: ${this.config.controls_header_height}px;`, // Position below controls-header
         });
 
         this.$upper_header = this.create_el({
@@ -510,7 +502,7 @@ export default class Gantt {
 
     make_side_header() {
         this.$side_header = this.create_el({ classes: 'side-header' });
-        this.$controls_header.appendChild(this.$side_header); // Move to controls-header
+        this.$upper_header.prepend(this.$side_header);
 
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
@@ -750,17 +742,14 @@ export default class Gantt {
             (diff_in_units / this.config.step) * this.config.column_width;
 
         this.$current_highlight = this.create_el({
-            top: this.config.header_height + this.config.controls_header_height,
+            top: this.config.header_height,
             left,
             height: this.grid_height - this.config.header_height,
             classes: 'current-highlight',
             append_to: this.$container,
         });
         this.$current_ball_highlight = this.create_el({
-            top:
-                this.config.header_height +
-                this.config.controls_header_height -
-                6,
+            top: this.config.header_height - 6,
             left: left - 2.5,
             width: 6,
             height: 6,
@@ -805,9 +794,7 @@ export default class Gantt {
         // Create or update custom highlight
         if (!this.$custom_highlight) {
             this.$custom_highlight = this.create_el({
-                top:
-                    this.config.header_height +
-                    this.config.controls_header_height,
+                top: this.config.header_height,
                 left,
                 width: 2,
                 height: gridHeight,
@@ -824,10 +811,7 @@ export default class Gantt {
         // Create or update custom ball highlight
         if (!this.$custom_ball_highlight) {
             this.$custom_ball_highlight = this.create_el({
-                top:
-                    this.config.header_height +
-                    this.config.controls_header_height -
-                    6,
+                top: this.config.header_height - 6,
                 left: left - 2,
                 width: 6,
                 height: 6,
@@ -916,8 +900,8 @@ export default class Gantt {
         // Toggle highlights based on player state
         if (this.options.player_state) {
             this.play_animated_highlight(
-                highlightDimensionsCustom.left,
-                highlightDimensionsCustom.dateObj,
+                highlightDimensions.left,
+                highlightDimensions.dateObj,
             );
             // Hide custom highlight when playing
             if (this.$custom_highlight)
@@ -968,9 +952,7 @@ export default class Gantt {
         // Create animated highlight bar if not exists
         if (!this.$animated_highlight) {
             this.$animated_highlight = this.create_el({
-                top:
-                    this.config.header_height +
-                    this.config.controls_header_height,
+                top: this.config.header_height,
                 left: adjustedLeft,
                 width: 2,
                 height: gridHeight,
@@ -983,13 +965,31 @@ export default class Gantt {
             this.$animated_highlight.style.height = `${gridHeight}px`;
         }
 
+        // Debug height and CSS variables
+        const animatedStyle = getComputedStyle(this.$animated_highlight);
+        const height = animatedStyle.height;
+        const cssGridHeight = getComputedStyle(
+            document.documentElement,
+        ).getPropertyValue('--gv-grid-height');
+        const lowerHeaderHeight = getComputedStyle(
+            document.documentElement,
+        ).getPropertyValue('--gv-lower-header-height');
+        const upperHeaderHeight = getComputedStyle(
+            document.documentElement,
+        ).getPropertyValue('--gv-upper-header-height');
+        console.log('Animated highlight height:', height, {
+            '--gv-grid-height': cssGridHeight,
+            '--gv-lower-header-height': lowerHeaderHeight,
+            '--gv-upper-header-height': upperHeaderHeight,
+            'this.grid_height': this.grid_height,
+            'this.config.header_height': this.config.header_height,
+            grid_element_height: gridHeight,
+        });
+
         // Create animated highlight ball if not exists
         if (!this.$animated_ball_highlight) {
             this.$animated_ball_highlight = this.create_el({
-                top:
-                    this.config.header_height +
-                    this.config.controls_header_height -
-                    6,
+                top: this.config.header_height - 6,
                 left: adjustedLeft - 2,
                 width: 6,
                 height: 6,
