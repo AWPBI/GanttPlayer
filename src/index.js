@@ -15,6 +15,7 @@ export default class Gantt {
         this.setup_options(options);
         this.setup_tasks(tasks);
         this.overlapping_tasks = new Set();
+        this.lastTaskY = null; // Track last known y position
         this.change_view_mode();
         this.bind_events();
         this.scrollAnimationFrame = null; // Track animation frame
@@ -1136,6 +1137,7 @@ export default class Gantt {
         );
         this.options.player_state = false;
         this.overlapping_tasks.clear();
+        this.lastTaskY = null; // Reset lastTaskY on playback reset
         clearInterval(this.player_interval);
         this.player_interval = null;
         if (this.scrollAnimationFrame) {
@@ -1431,7 +1433,7 @@ export default class Gantt {
         // If no active tasks, fall back to the task with the earliest start
         const targetTask = activeTasks.length
             ? activeTasks.reduce(
-                  (max, task) => (task._index > max._index ? task : max),
+                  (min, task) => (task._index < min._index ? task : min),
                   activeTasks[0],
               )
             : this.tasks.reduce(
@@ -1469,6 +1471,9 @@ export default class Gantt {
                 targetTask._index *
                     (this.options.bar_height + this.options.padding);
         }
+
+        // Store the initial taskY
+        this.lastTaskY = taskY;
 
         // Adjust for header height to align with scroll container's coordinate system
         const adjustedY = taskY - this.config.header_height;
@@ -1669,32 +1674,37 @@ export default class Gantt {
                         task._start <= currentDate && currentDate <= task._end,
                 );
 
-                // If no active tasks, fall back to the task with the earliest start
-                const targetTask = activeTasks.length
-                    ? activeTasks.reduce(
-                          (max, task) =>
-                              task._index > max._index ? task : max,
-                          activeTasks[0],
-                      )
-                    : this.tasks.reduce(
-                          (earliest, task) =>
-                              task._start < earliest._start ? task : earliest,
-                          this.tasks[0],
-                      );
-
-                // Find the corresponding bar-wrapper element
-                const barWrapper = this.$svg.querySelector(
-                    `.bar-wrapper[data-id="${targetTask.id}"]`,
-                );
-
                 let taskY;
-                if (barWrapper) {
-                    // Get the y attribute from the bar-wrapper
-                    taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
-                    // Validate taskY; if 0, calculate based on index
-                    if (taskY === 0) {
+                if (activeTasks.length) {
+                    // Select the task with the lowest _index (highest in chart)
+                    const targetTask = activeTasks.reduce(
+                        (min, task) => (task._index < min._index ? task : min),
+                        activeTasks[0],
+                    );
+
+                    // Find the corresponding bar-wrapper element
+                    const barWrapper = this.$svg.querySelector(
+                        `.bar-wrapper[data-id="${targetTask.id}"]`,
+                    );
+
+                    if (barWrapper) {
+                        // Get the y attribute from the bar-wrapper
+                        taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+                        // Validate taskY; if 0, calculate based on index
+                        if (taskY === 0) {
+                            console.warn(
+                                `Invalid y attribute for task "${targetTask.id}", calculating from index`,
+                            );
+                            taskY =
+                                this.config.header_height +
+                                targetTask._index *
+                                    (this.options.bar_height +
+                                        this.options.padding);
+                        }
+                    } else {
+                        // Fallback: calculate y based on task index
                         console.warn(
-                            `Invalid y attribute for task "${targetTask.id}", calculating from index`,
+                            `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
                         );
                         taskY =
                             this.config.header_height +
@@ -1702,15 +1712,50 @@ export default class Gantt {
                                 (this.options.bar_height +
                                     this.options.padding);
                     }
+
+                    // Update lastTaskY with the current task's y position
+                    this.lastTaskY = taskY;
+                } else if (this.lastTaskY !== null) {
+                    // Use the last known taskY during gaps
+                    taskY = this.lastTaskY;
+                    console.log(`No active tasks, using lastTaskY: ${taskY}`);
                 } else {
-                    // Fallback: calculate y based on task index
-                    console.warn(
-                        `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
+                    // Fallback: use the task with the earliest start
+                    const targetTask = this.tasks.reduce(
+                        (earliest, task) =>
+                            task._start < earliest._start ? task : earliest,
+                        this.tasks[0],
                     );
-                    taskY =
-                        this.config.header_height +
-                        targetTask._index *
-                            (this.options.bar_height + this.options.padding);
+
+                    const barWrapper = this.$svg.querySelector(
+                        `.bar-wrapper[data-id="${targetTask.id}"]`,
+                    );
+
+                    if (barWrapper) {
+                        taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+                        if (taskY === 0) {
+                            console.warn(
+                                `Invalid y attribute for task "${targetTask.id}", calculating from index`,
+                            );
+                            taskY =
+                                this.config.header_height +
+                                targetTask._index *
+                                    (this.options.bar_height +
+                                        this.options.padding);
+                        }
+                    } else {
+                        console.warn(
+                            `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
+                        );
+                        taskY =
+                            this.config.header_height +
+                            targetTask._index *
+                                (this.options.bar_height +
+                                    this.options.padding);
+                    }
+
+                    // Initialize lastTaskY
+                    this.lastTaskY = taskY;
                 }
 
                 // Adjust for header height to align with scroll container's coordinate system
@@ -1732,7 +1777,13 @@ export default class Gantt {
                 container.scrollTop = clampedScrollTop;
 
                 console.log('animateScroll vertical scroll', {
-                    taskId: targetTask.id,
+                    taskId: activeTasks.length
+                        ? activeTasks.reduce(
+                              (min, task) =>
+                                  task._index < min._index ? task : min,
+                              activeTasks[0],
+                          ).id
+                        : 'none',
                     taskY,
                     adjustedY,
                     viewportHeight,
@@ -1741,6 +1792,7 @@ export default class Gantt {
                     clampedScrollTop,
                     maxScrollTop,
                     activeTaskCount: activeTasks.length,
+                    lastTaskY: this.lastTaskY,
                 });
             }
 
@@ -1800,6 +1852,7 @@ export default class Gantt {
                     this.options.custom_marker_init_date,
                 );
                 this.overlapping_tasks.clear();
+                this.lastTaskY = null; // Reset lastTaskY on loop
                 console.log('Loop mode: resetting custom_marker_date');
                 this.render();
                 if (this.options.player_state) {
@@ -1813,6 +1866,7 @@ export default class Gantt {
                 // Stop player
                 this.options.player_state = false;
                 this.overlapping_tasks.clear();
+                this.lastTaskY = null; // Reset lastTaskY on stop
                 console.log('Stopping player, player_state set to false');
 
                 // Update button
