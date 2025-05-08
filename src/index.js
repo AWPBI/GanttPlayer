@@ -205,6 +205,7 @@ export default class Gantt {
             })
             .filter((t) => t);
         this.setup_dependencies();
+        this.scroll_to_latest_task(); // Scroll to the latest task after setup
     }
 
     setup_dependencies() {
@@ -220,6 +221,7 @@ export default class Gantt {
     refresh(tasks) {
         this.setup_tasks(tasks);
         this.change_view_mode();
+        this.scroll_to_latest_task(); // Scroll to the latest task after refresh
     }
 
     update_task(id, new_details) {
@@ -689,7 +691,7 @@ export default class Gantt {
                         ) /
                             this.config.step) *
                         this.config.column_width;
-                    const height = this.grid_height - this.config.header0;
+                    const height = this.grid_height - this.config.header_height;
                     const d_formatted = date_utils
                         .format(d, 'YYYY-MM-DD', this.options.language)
                         .replace(' ', '_');
@@ -1417,6 +1419,26 @@ export default class Gantt {
         }
     }
 
+    scroll_to_latest_task() {
+        if (!this.tasks.length) return;
+
+        // Find the task with the highest index (latest added)
+        const latestTask = this.tasks.reduce(
+            (latest, task) => (task._index > latest._index ? task : latest),
+            this.tasks[0],
+        );
+
+        // Calculate the vertical position of the latest task
+        const rowHeight = this.options.bar_height + this.options.padding;
+        const taskY = this.config.header_height + latestTask._index * rowHeight;
+
+        // Scroll to the calculated position
+        this.$container.scrollTo({
+            top: taskY - this.config.header_height, // Adjust to keep task in view
+            behavior: 'smooth',
+        });
+    }
+
     player_update() {
         console.log('player_update called', {
             player_state: this.options.player_state,
@@ -1692,8 +1714,6 @@ export default class Gantt {
                     });
                 }
 
-                // Re-render to update chart
-                // this.render();
                 this.trigger_event('finish', []);
                 console.log('Triggered finish event');
             }
