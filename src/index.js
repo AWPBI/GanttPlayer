@@ -811,18 +811,18 @@ export default class Gantt {
             this.$custom_ball_highlight.style.display = 'block';
         }
 
-        if (date >= this.gantt_end) {
-            console.warn('Custom highlight date is out of bounds:', {
-                date,
-                gantt_end: this.gantt_end,
-            });
-            if (this.$options.player_loop) {
-                this.reset_play();
-                this.toggle_play();
-            } else {
-                this.trigger_event('pause', []);
-            }
-        }
+        // if (date >= this.gantt_end) {
+        //     console.warn('Custom highlight date is out of bounds:', {
+        //         date,
+        //         gantt_end: this.gantt_end,
+        //     });
+        //     if (this.$options.player_loop) {
+        //         this.reset_play();
+        //         this.toggle_play();
+        //     } else {
+        //         this.trigger_event('pause', []);
+        //     }
+        // }
 
         return { left, dateObj: date };
     }
