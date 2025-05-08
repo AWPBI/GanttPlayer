@@ -821,6 +821,22 @@ export default class Gantt {
             this.$custom_ball_highlight.style.display = 'block';
         }
 
+        if (date >= this.gantt_end) {
+            console.warn('Custom highlight date is out of bounds:', {
+                date,
+                gantt_end: this.gantt_end,
+            });
+            if (this.$options.player_loop) {
+                console.log('Looping to start date');
+                this.trigger_event('reset', []);
+                console.log('playing from start date');
+                this.trigger_event('play', []);
+            } else {
+                console.log('Pausing at end date');
+                this.trigger_event('pause', []);
+            }
+        }
+
         return { left, dateObj: date };
     }
 
@@ -1071,6 +1087,7 @@ export default class Gantt {
             if (this.$custom_highlight) this.$custom_highlight.remove();
             if (this.$custom_ball_highlight)
                 this.$custom_ball_highlight.remove();
+            console.log('in toggle_play');
             const highlightDimensions = this.highlight_custom(
                 this.config.custom_marker_date,
             );
