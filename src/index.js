@@ -1437,10 +1437,13 @@ export default class Gantt {
             // Get the y attribute from the bar-wrapper
             const taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
 
-            // Calculate the desired scroll position to center the task in the viewport
+            // Adjust for header height to align with scroll container's coordinate system
+            const adjustedY = taskY - this.config.header_height;
+
+            // Calculate the desired scroll position to position the task near the top of the viewport
             const viewportHeight = this.$container.clientHeight;
-            const targetScrollTop =
-                taskY - viewportHeight / 2 + this.options.bar_height / 2;
+            const offset = this.options.padding; // Small offset from top for visibility
+            let targetScrollTop = adjustedY - offset;
 
             // Ensure scrollTop is within bounds
             const maxScrollTop = this.$container.scrollHeight - viewportHeight;
@@ -1453,6 +1456,17 @@ export default class Gantt {
             this.$container.scrollTo({
                 top: clampedScrollTop,
                 behavior: 'smooth',
+            });
+
+            console.log('scroll_to_latest_task', {
+                taskId: latestTask.id,
+                taskY,
+                adjustedY,
+                viewportHeight,
+                offset,
+                targetScrollTop,
+                clampedScrollTop,
+                maxScrollTop,
             });
         } else {
             console.warn(`Bar wrapper for task "${latestTask.id}" not found`);
@@ -1633,12 +1647,13 @@ export default class Gantt {
                     // Get the y attribute from the bar-wrapper
                     const taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
 
-                    // Calculate the desired scroll position to center the task in the viewport
+                    // Adjust for header height to align with scroll container's coordinate system
+                    const adjustedY = taskY - this.config.header_height;
+
+                    // Calculate the desired scroll position to position the task near the top of the viewport
                     const viewportHeight = container.clientHeight;
-                    const targetScrollTop =
-                        taskY -
-                        viewportHeight / 2 +
-                        this.options.bar_height / 2;
+                    const verticalOffset = this.options.padding; // Small offset from top for visibility
+                    let targetScrollTop = adjustedY - verticalOffset;
 
                     // Ensure scrollTop is within bounds
                     const maxScrollTop =
@@ -1650,6 +1665,17 @@ export default class Gantt {
 
                     // Update vertical scroll position
                     container.scrollTop = clampedScrollTop;
+
+                    console.log('animateScroll vertical scroll', {
+                        taskId: latestTask.id,
+                        taskY,
+                        adjustedY,
+                        viewportHeight,
+                        verticalOffset,
+                        targetScrollTop,
+                        clampedScrollTop,
+                        maxScrollTop,
+                    });
                 } else {
                     console.warn(
                         `Bar wrapper for task "${latestTask.id}" not found`,
