@@ -61,7 +61,7 @@ export default class Gantt {
             append_to: this.$svg.parentElement,
         });
 
-        // Create controls-header for side-header
+        // Add controls header
         this.$controls_header = this.create_el({
             classes: 'controls-header',
             append_to: this.$container,
@@ -440,8 +440,10 @@ export default class Gantt {
         const grid_width = this.dates.length * this.config.column_width;
         const grid_height = Math.max(
             this.config.header_height +
+                this.options.padding +
                 (this.options.bar_height + this.options.padding) *
-                    this.tasks.length,
+                    this.tasks.length -
+                10,
             this.options.container_height !== 'auto'
                 ? this.options.container_height
                 : 0,
@@ -462,8 +464,7 @@ export default class Gantt {
         });
         this.grid_height = grid_height;
         if (this.options.container_height === 'auto')
-            this.$container.style.height =
-                grid_height + this.config.controls_header_height + 16 + 'px';
+            this.$container.style.height = grid_height + 16 + 'px';
     }
 
     make_grid_rows() {
@@ -472,7 +473,7 @@ export default class Gantt {
         const row_width = this.dates.length * this.config.column_width;
         const row_height = this.options.bar_height + this.options.padding;
 
-        let y = this.config.header_height; // Start directly below grid-header
+        let y = this.config.header_height;
         for (
             let y = this.config.header_height;
             y < this.grid_height;
@@ -509,7 +510,7 @@ export default class Gantt {
 
     make_side_header() {
         this.$side_header = this.create_el({ classes: 'side-header' });
-        this.$controls_header.appendChild(this.$side_header); // Append to controls-header
+        this.$controls_header.appendChild(this.$side_header); // Move to controls-header
 
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
@@ -581,7 +582,7 @@ export default class Gantt {
     make_grid_ticks() {
         if (this.options.lines === 'none') return;
         let tick_x = 0;
-        let tick_y = this.config.header_height; // Start directly below grid-header
+        let tick_y = this.config.header_height;
         let tick_height = this.grid_height - this.config.header_height;
 
         let $lines_layer = createSVG('g', {
@@ -789,7 +790,7 @@ export default class Gantt {
         console.log('highlight_custom result:', { diff, left });
 
         // Get grid height
-        let gridHeight = this.grid_height; // Use calculated grid height
+        let gridHeight = 1152; // Default to correct height
         const gridElement = this.$svg.querySelector('.grid');
         if (gridElement) {
             gridHeight = gridElement.getBoundingClientRect().height;
@@ -809,16 +810,14 @@ export default class Gantt {
                     this.config.controls_header_height,
                 left,
                 width: 2,
-                height: gridHeight - this.config.header_height,
+                height: gridHeight,
                 classes: 'custom-highlight',
                 append_to: this.$container,
                 style: 'background: var(--g-custom-highlight); z-index: 999; display: block;',
             });
         } else {
             this.$custom_highlight.style.left = `${left}px`;
-            this.$custom_highlight.style.height = `${
-                gridHeight - this.config.header_height
-            }px`;
+            this.$custom_highlight.style.height = `${gridHeight}px`;
             this.$custom_highlight.style.display = 'block';
         }
 
@@ -917,8 +916,8 @@ export default class Gantt {
         // Toggle highlights based on player state
         if (this.options.player_state) {
             this.play_animated_highlight(
-                highlightDimensions.left,
-                highlightDimensions.dateObj,
+                highlightDimensionsCustom.left,
+                highlightDimensionsCustom.dateObj,
             );
             // Hide custom highlight when playing
             if (this.$custom_highlight)
@@ -954,7 +953,7 @@ export default class Gantt {
         }
 
         // Get grid height
-        let gridHeight = this.grid_height; // Use calculated grid height
+        let gridHeight = 1152; // Default to correct height
         const gridElement = this.$svg.querySelector('.grid');
         if (gridElement) {
             gridHeight = gridElement.getBoundingClientRect().height;
@@ -974,38 +973,15 @@ export default class Gantt {
                     this.config.controls_header_height,
                 left: adjustedLeft,
                 width: 2,
-                height: gridHeight - this.config.header_height,
+                height: gridHeight,
                 classes: 'animated-highlight',
                 append_to: this.$container,
                 style: 'background: var(--g-custom-highlight); z-index: 999;',
             });
         } else {
             this.$animated_highlight.style.left = `${adjustedLeft}px`;
-            this.$animated_highlight.style.height = `${
-                gridHeight - this.config.header_height
-            }px`;
+            this.$animated_highlight.style.height = `${gridHeight}px`;
         }
-
-        // Debug height and CSS variables
-        const animatedStyle = getComputedStyle(this.$animated_highlight);
-        const height = animatedStyle.height;
-        const cssGridHeight = getComputedStyle(
-            document.documentElement,
-        ).getPropertyValue('--gv-grid-height');
-        const lowerHeaderHeight = getComputedStyle(
-            document.documentElement,
-        ).getPropertyValue('--gv-lower-header-height');
-        const upperHeaderHeight = getComputedStyle(
-            document.documentElement,
-        ).getPropertyValue('--gv-upper-header-height');
-        console.log('Animated highlight height:', height, {
-            '--gv-grid-height': cssGridHeight,
-            '--gv-lower-header-height': lowerHeaderHeight,
-            '--gv-upper-header-height': upperHeaderHeight,
-            'this.grid_height': this.grid_height,
-            'this.config.header_height': this.config.header_height,
-            grid_element_height: gridHeight,
-        });
 
         // Create animated highlight ball if not exists
         if (!this.$animated_ball_highlight) {
