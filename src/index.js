@@ -501,11 +501,26 @@ export default class Gantt {
     }
 
     make_grid_header() {
+        // Ensure the header has the correct width and is visible
         this.$header.style.width =
             this.dates.length * this.config.column_width + 'px';
+        this.$header.style.height = this.config.header_height + 'px';
     }
 
     make_side_header() {
+        // Add a placeholder text if no controls are added
+        if (
+            !this.options.view_mode_select &&
+            !this.options.today_button &&
+            !this.options.player_button
+        ) {
+            const $placeholder = this.create_el({
+                classes: 'side-header-placeholder',
+                append_to: this.$side_header,
+            });
+            $placeholder.innerText = 'Gantt Controls';
+        }
+
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
             $select.classList.add('viewmode-select');
@@ -539,7 +554,7 @@ export default class Gantt {
             $today_button.classList.add('today-button');
             $today_button.textContent = 'Today';
             $today_button.onclick = this.scroll_current.bind(this);
-            this.$side_header.prepend($today_button);
+            this.$side_header.appendChild($today_button);
             this.$today_button = $today_button;
         }
 
@@ -552,7 +567,7 @@ export default class Gantt {
                 player_reset_button.textContent = 'Reset';
             }
             player_reset_button.onclick = this.reset_play.bind(this);
-            this.$side_header.prepend(player_reset_button);
+            this.$side_header.appendChild(player_reset_button);
             this.$player_reset_button = player_reset_button;
         }
 
@@ -568,7 +583,7 @@ export default class Gantt {
                 $player_button.textContent = 'Play';
             }
             $player_button.onclick = this.toggle_play.bind(this);
-            this.$side_header.prepend($player_button);
+            this.$side_header.appendChild($player_button);
             this.$player_button = $player_button;
         }
     }
@@ -1174,6 +1189,9 @@ export default class Gantt {
                     append_to: this.$lower_header,
                 });
                 $lower_text.innerText = date.lower_text;
+                // Ensure the element is styled to be visible
+                $lower_text.style.width = this.config.column_width + 'px';
+                $lower_text.style.textAlign = 'center';
             }
 
             if (date.upper_text) {
@@ -1184,6 +1202,9 @@ export default class Gantt {
                     append_to: this.$upper_header,
                 });
                 $upper_text.innerText = date.upper_text;
+                // Ensure the element is styled to be visible
+                $upper_text.style.width = this.config.column_width + 'px';
+                $upper_text.style.textAlign = 'center';
             }
         });
         this.upperTexts = Array.from(
@@ -1213,15 +1234,18 @@ export default class Gantt {
         let upper_text = this.config.view_mode.upper_text;
         let lower_text = this.config.view_mode.lower_text;
 
+        // Provide fallback formatting if upper_text or lower_text is not defined
         if (!upper_text) {
-            this.config.view_mode.upper_text = () => '';
+            this.config.view_mode.upper_text = (date) =>
+                date_utils.format(date, 'YYYY', this.options.language);
         } else if (typeof upper_text === 'string') {
             this.config.view_mode.upper_text = (date) =>
                 date_utils.format(date, upper_text, this.options.language);
         }
 
         if (!lower_text) {
-            this.config.view_mode.lower_text = () => '';
+            this.config.view_mode.lower_text = (date) =>
+                date_utils.format(date, 'MMM D', this.options.language);
         } else if (typeof lower_text === 'string') {
             this.config.view_mode.lower_text = (date) =>
                 date_utils.format(date, lower_text, this.options.language);
