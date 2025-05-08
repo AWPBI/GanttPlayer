@@ -1693,7 +1693,7 @@ export default class Gantt {
                 }
 
                 // Re-render to update chart
-                this.render();
+                // this.render();
                 this.trigger_event('finish', []);
                 console.log('Triggered finish event');
             }
