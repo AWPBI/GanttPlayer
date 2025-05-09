@@ -1154,14 +1154,14 @@ export default class Gantt {
         }
 
         // Remove animated highlight, show custom highlight
-        if (this.$animated_highlight) {
-            this.$animated_highlight.remove();
-            this.$animated_highlight = null;
-        }
-        if (this.$animated_ball_highlight) {
-            this.$animated_ball_highlight.remove();
-            this.$animated_ball_highlight = null;
-        }
+        // if (this.$animated_highlight) {
+        //     this.$animated_highlight.remove();
+        //     this.$animated_highlight = null;
+        // }
+        // if (this.$animated_ball_highlight) {
+        //     this.$animated_ball_highlight.remove();
+        //     this.$animated_ball_highlight = null;
+        // }
         if (this.$custom_highlight)
             this.$custom_highlight.style.display = 'block';
         if (this.$custom_ball_highlight)
