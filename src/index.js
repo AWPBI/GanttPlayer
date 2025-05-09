@@ -760,74 +760,11 @@ export default class Gantt {
     }
 
     highlight_custom(date) {
-        if (!date || !this.gantt_start || !this.config.unit) {
-            console.error('Invalid inputs for highlight_custom:', {
-                date,
-                gantt_start: this.gantt_start,
-                unit: this.config.unit,
-            });
-            return { left: 0, dateObj: date };
-        }
-        const diff = date_utils.diff(date, this.gantt_start, this.config.unit);
-        const left = (diff / this.config.step) * this.config.column_width;
-        console.log('highlight_custom result:', { diff, left });
-
-        // Get grid height
-        let gridHeight = 1152; // Default to correct height
-        const gridElement = this.$svg.querySelector('.grid');
-        if (gridElement) {
-            gridHeight = gridElement.getBoundingClientRect().height;
-        }
-        // Create or update custom highlight
-        if (!this.$custom_highlight) {
-            this.$custom_highlight = this.create_el({
-                top: this.config.header_height,
-                left,
-                width: 2,
-                height: gridHeight,
-                classes: 'custom-highlight',
-                append_to: this.$container,
-                style: 'background: var(--g-custom-highlight); z-index: 999; display: block;',
-            });
-        } else {
-            this.$custom_highlight.style.left = `${left}px`;
-            this.$custom_highlight.style.height = `${gridHeight}px`;
-            this.$custom_highlight.style.display = 'block';
-        }
-
-        // Create or update custom ball highlight
-        if (!this.$custom_ball_highlight) {
-            this.$custom_ball_highlight = this.create_el({
-                top: this.config.header_height - 6,
-                left: left - 2,
-                width: 6,
-                height: 6,
-                classes: 'custom-ball-highlight',
-                append_to: this.$header,
-                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001; display: block;',
-            });
-        } else {
-            this.$custom_ball_highlight.style.left = `${left - 2}px`;
-            this.$custom_ball_highlight.style.display = 'block';
-        }
-
-        if (date >= this.gantt_end) {
-            console.warn('Custom highlight date is out of bounds:', {
-                date,
-                gantt_end: this.gantt_end,
-            });
-            if (this.$options.player_loop) {
-                console.log('Looping to start date');
-                this.trigger_event('reset', []);
-                console.log('playing from start date');
-                this.trigger_event('play', []);
-            } else {
-                console.log('Pausing at end date');
-                this.trigger_event('pause', []);
-            }
-        }
-
-        return { left, dateObj: date };
+        // Deprecated: No longer used as we rely solely on animated-highlight
+        console.warn(
+            'highlight_custom is deprecated; using animated-highlight instead',
+        );
+        return this.play_animated_highlight(0, date);
     }
 
     make_grid_highlights() {
@@ -875,68 +812,41 @@ export default class Gantt {
             });
         }
 
-        const highlightDimensions = this.highlight_current();
-        let highlightDimensionsCustom;
+        this.highlight_current();
         if (this.options.custom_marker) {
-            highlightDimensionsCustom = this.highlight_custom(
+            // Initialize animated highlight at custom_marker_date in paused state
+            const diff = date_utils.diff(
                 this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
             );
-        }
-        if (!highlightDimensions || !highlightDimensionsCustom) return;
-
-        // Toggle highlights based on player state
-        this.play_animated_highlight(
-            highlightDimensions.left,
-            highlightDimensions.dateObj,
-        );
-        if (this.options.player_state) {
-            // Hide custom highlight when playing
-            if (this.$custom_highlight)
-                this.$custom_highlight.style.display = 'none';
-            if (this.$custom_ball_highlight)
-                this.$custom_ball_highlight.style.display = 'none';
+            const left = (diff / this.config.step) * this.config.column_width;
+            this.play_animated_highlight(left, this.config.custom_marker_date);
         }
     }
 
     play_animated_highlight(left, dateObj) {
-        // Validate and adjust left position
         let adjustedLeft = left;
         let adjustedDateObj = dateObj;
-
         if (!dateObj || isNaN(left) || left === 0) {
-            const customHighlight = this.$custom_highlight;
-            if (customHighlight) {
-                adjustedLeft = parseFloat(customHighlight.style.left) || 0;
-                console.log('Using custom-highlight left:', adjustedLeft);
-            }
-            if (adjustedLeft === 0) {
-                adjustedLeft =
-                    (date_utils.diff(
-                        this.config.custom_marker_date,
-                        this.gantt_start,
-                        this.config.unit,
-                    ) /
-                        this.config.step) *
-                    this.config.column_width;
-                console.log('Using calculated left:', adjustedLeft);
-            }
+            adjustedLeft =
+                (date_utils.diff(
+                    this.config.custom_marker_date,
+                    this.gantt_start,
+                    this.config.unit,
+                ) /
+                    this.config.step) *
+                this.config.column_width;
             adjustedDateObj = this.config.custom_marker_date || new Date();
         }
 
-        // Get grid height
-        let gridHeight = 1152; // Default to correct height
+        let gridHeight = 1152;
         const gridElement = this.$svg.querySelector('.grid');
         if (gridElement) {
             gridHeight = gridElement.getBoundingClientRect().height;
-            console.log('Grid element height:', gridHeight);
-        } else {
-            console.warn(
-                'Grid element not found, using default height:',
-                gridHeight,
-            );
         }
 
-        // Create animated highlight bar if not exists
+        // Create or update animated highlight
         if (!this.$animated_highlight) {
             this.$animated_highlight = this.create_el({
                 top: this.config.header_height,
@@ -952,28 +862,7 @@ export default class Gantt {
             this.$animated_highlight.style.height = `${gridHeight}px`;
         }
 
-        // Debug height and CSS variables
-        const animatedStyle = getComputedStyle(this.$animated_highlight);
-        const height = animatedStyle.height;
-        const cssGridHeight = getComputedStyle(
-            document.documentElement,
-        ).getPropertyValue('--gv-grid-height');
-        const lowerHeaderHeight = getComputedStyle(
-            document.documentElement,
-        ).getPropertyValue('--gv-lower-header-height');
-        const upperHeaderHeight = getComputedStyle(
-            document.documentElement,
-        ).getPropertyValue('--gv-upper-header-height');
-        console.log('Animated highlight height:', height, {
-            '--gv-grid-height': cssGridHeight,
-            '--gv-lower-header-height': lowerHeaderHeight,
-            '--gv-upper-header-height': upperHeaderHeight,
-            'this.grid_height': this.grid_height,
-            'this.config.header_height': this.config.header_height,
-            grid_element_height: gridHeight,
-        });
-
-        // Create animated highlight ball if not exists
+        // Create or update animated ball highlight
         if (!this.$animated_ball_highlight) {
             this.$animated_ball_highlight = this.create_el({
                 top: this.config.header_height - 6,
@@ -988,45 +877,45 @@ export default class Gantt {
             this.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
         }
 
-        // Check if animation should proceed
-        let shouldAnimate = this.options.player_state;
-        let animationDuration = (this.options.player_interval || 1000) / 1000;
-        let moveDistance = this.config.column_width;
+        // Set animation properties only if player_state is true
+        if (this.options.player_state) {
+            let animationDuration =
+                (this.options.player_interval || 1000) / 1000;
+            let moveDistance = this.config.column_width;
 
-        if (
-            this.config.player_end_date &&
-            adjustedDateObj >= this.config.player_end_date
-        ) {
-            shouldAnimate = false;
-        } else if (
-            this.config.player_end_date &&
-            date_utils.add(
-                adjustedDateObj,
-                this.config.step,
-                this.config.unit,
-            ) > this.config.player_end_date
-        ) {
-            // Calculate partial animation for the final step
-            const remainingTime = date_utils.diff(
-                this.config.player_end_date,
-                adjustedDateObj,
-                'millisecond',
-            );
-            animationDuration =
-                remainingTime / (this.options.player_interval || 1000);
-            const totalUnits = date_utils.diff(
-                this.config.player_end_date,
-                this.gantt_start,
-                this.config.unit,
-            );
-            const endLeft =
-                (totalUnits / this.config.step) * this.config.column_width;
-            moveDistance = endLeft - adjustedLeft;
-            shouldAnimate = moveDistance > 0;
-        }
+            if (
+                this.config.player_end_date &&
+                adjustedDateObj >= this.config.player_end_date
+            ) {
+                return {
+                    left: adjustedLeft,
+                    dateObj: adjustedDateObj,
+                };
+            } else if (
+                this.config.player_end_date &&
+                date_utils.add(
+                    adjustedDateObj,
+                    this.config.step,
+                    this.config.unit,
+                ) > this.config.player_end_date
+            ) {
+                const remainingTime = date_utils.diff(
+                    this.config.player_end_date,
+                    adjustedDateObj,
+                    'millisecond',
+                );
+                animationDuration =
+                    remainingTime / (this.options.player_interval || 1000);
+                const totalUnits = date_utils.diff(
+                    this.config.player_end_date,
+                    this.gantt_start,
+                    this.config.unit,
+                );
+                const endLeft =
+                    (totalUnits / this.config.step) * this.config.column_width;
+                moveDistance = endLeft - adjustedLeft;
+            }
 
-        // Apply animation properties if needed
-        if (shouldAnimate) {
             [this.$animated_highlight, this.$animated_ball_highlight].forEach(
                 (el) => {
                     el.style.setProperty(
@@ -1043,6 +932,14 @@ export default class Gantt {
                     el.style.animationPlayState = 'running';
                 },
             );
+        } else {
+            // Ensure animation is paused
+            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
+                (el) => {
+                    el.style.animation = 'none';
+                    el.style.animationPlayState = 'paused';
+                },
+            );
         }
 
         return {
@@ -1054,18 +951,16 @@ export default class Gantt {
     toggle_play() {
         if (!this.config.custom_marker_date) {
             this.config.custom_marker_date =
-                this.config.custom_marker_init_date || new Date();
+                this.options.custom_marker_init_date || new Date();
         }
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
-            // Start player interval
             this.player_interval = setInterval(
                 this.player_update.bind(this),
                 this.options.player_interval || 1000,
             );
             this.trigger_event('start', []);
 
-            // Update button
             if (this.options.player_use_fa) {
                 this.$player_button.classList.remove('fa-play');
                 this.$player_button.classList.add('fa-pause');
@@ -1073,21 +968,15 @@ export default class Gantt {
                 this.$player_button.textContent = 'Pause';
             }
 
-            // Hide custom highlight, initialize animated highlight
-            if (this.$custom_highlight) this.$custom_highlight.remove();
-            if (this.$custom_ball_highlight)
-                this.$custom_ball_highlight.remove();
-            console.log('in toggle_play');
-            const highlightDimensions = this.highlight_custom(
+            // Update animated highlight to start animation
+            const diff = date_utils.diff(
                 this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
             );
-
-            this.play_animated_highlight(
-                highlightDimensions.left,
-                highlightDimensions.dateObj,
-            );
+            const left = (diff / this.config.step) * this.config.column_width;
+            this.play_animated_highlight(left, this.config.custom_marker_date);
         } else {
-            // Stop player interval and animation
             clearInterval(this.player_interval);
             this.player_interval = null;
             if (this.scrollAnimationFrame) {
@@ -1096,7 +985,6 @@ export default class Gantt {
             }
             this.trigger_event('pause', []);
 
-            // Update button
             if (this.options.player_use_fa) {
                 this.$player_button.classList.remove('fa-pause');
                 this.$player_button.classList.add('fa-play');
@@ -1104,27 +992,24 @@ export default class Gantt {
                 this.$player_button.textContent = 'Play';
             }
 
-            // Pause animation, show custom highlight
-            if (this.$animated_highlight)
+            // Pause animation
+            if (this.$animated_highlight) {
                 this.$animated_highlight.style.animationPlayState = 'paused';
-            if (this.$animated_ball_highlight)
+            }
+            if (this.$animated_ball_highlight) {
                 this.$animated_ball_highlight.style.animationPlayState =
                     'paused';
-            if (this.$custom_highlight)
-                this.$custom_highlight.style.display = 'block';
-            if (this.$custom_ball_highlight)
-                this.$custom_ball_highlight.style.display = 'block';
+            }
         }
     }
 
     reset_play() {
-        console.log('reset_play called');
         this.config.custom_marker_date = new Date(
             this.options.custom_marker_init_date,
         );
         this.options.player_state = false;
         this.overlapping_tasks.clear();
-        this.lastTaskY = null; // Reset lastTaskY on playback reset
+        this.lastTaskY = null;
         clearInterval(this.player_interval);
         this.player_interval = null;
         if (this.scrollAnimationFrame) {
@@ -1132,7 +1017,6 @@ export default class Gantt {
             this.scrollAnimationFrame = null;
         }
 
-        // Update button
         if (this.options.player_use_fa) {
             this.$player_button.classList.remove('fa-pause');
             this.$player_button.classList.add('fa-play');
@@ -1140,21 +1024,24 @@ export default class Gantt {
             this.$player_button.textContent = 'Play';
         }
 
-        // Remove animated highlight, show custom highlight
-        if (this.$animated_highlight) {
-            this.$animated_highlight.remove();
-            this.$animated_highlight = null;
+        // Reset animated highlight position and pause
+        if (this.$animated_highlight && this.$animated_ball_highlight) {
+            const diff = date_utils.diff(
+                this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
+            );
+            const left = (diff / this.config.step) * this.config.column_width;
+            this.$animated_highlight.style.left = `${left}px`;
+            this.$animated_ball_highlight.style.left = `${left - 2}px`;
+            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
+                (el) => {
+                    el.style.animation = 'none';
+                    el.style.animationPlayState = 'paused';
+                },
+            );
         }
-        if (this.$animated_ball_highlight) {
-            this.$animated_ball_highlight.remove();
-            this.$animated_ball_highlight = null;
-        }
-        if (this.$custom_highlight)
-            this.$custom_highlight.style.display = 'block';
-        if (this.$custom_ball_highlight)
-            this.$custom_ball_highlight.style.display = 'block';
 
-        // Re-render to update custom highlight position
         this.render();
         this.trigger_event('reset', []);
     }
@@ -1764,42 +1651,33 @@ export default class Gantt {
 
     handle_animation_end() {
         try {
-            // Clear intervals and animation frames
             if (this.player_interval) {
                 clearInterval(this.player_interval);
                 this.player_interval = null;
-                console.log('Cleared player_interval');
             }
             if (this.scrollAnimationFrame) {
                 cancelAnimationFrame(this.scrollAnimationFrame);
                 this.scrollAnimationFrame = null;
-                console.log('Cleared scrollAnimationFrame');
             }
 
             if (this.options.player_loop) {
-                // Reset to initial date and continue
                 this.config.custom_marker_date = new Date(
                     this.options.custom_marker_init_date,
                 );
                 this.overlapping_tasks.clear();
-                this.lastTaskY = null; // Reset lastTaskY on loop
-                console.log('Loop mode: resetting custom_marker_date');
+                this.lastTaskY = null;
                 this.render();
                 if (this.options.player_state) {
                     this.player_interval = setInterval(
                         this.player_update.bind(this),
                         this.options.player_interval || 1000,
                     );
-                    console.log('Restarted player_interval for loop');
                 }
             } else {
-                // Stop player
                 this.options.player_state = false;
                 this.overlapping_tasks.clear();
-                this.lastTaskY = null; // Reset lastTaskY on stop
-                console.log('Stopping player, player_state set to false');
+                this.lastTaskY = null;
 
-                // Update button
                 if (this.$player_button) {
                     if (this.options.player_use_fa) {
                         this.$player_button.classList.remove('fa-pause');
@@ -1809,46 +1687,19 @@ export default class Gantt {
                     }
                 }
 
-                // Clear animations
+                // Pause animated highlight
                 if (this.$animated_highlight) {
                     this.$animated_highlight.style.animation = 'none';
-                    // this.$animated_highlight.remove();
-                    this.$animated_highlight = null;
-                    console.log('Removed animated_highlight');
+                    this.$animated_highlight.style.animationPlayState =
+                        'paused';
                 }
                 if (this.$animated_ball_highlight) {
                     this.$animated_ball_highlight.style.animation = 'none';
-                    // this.$animated_ball_highlight.remove();
-                    this.$animated_ball_highlight = null;
-                    console.log('Removed animated_ball_highlight');
-                }
-
-                // Ensure custom highlight is at the correct position
-                if (
-                    this.config.custom_marker_date &&
-                    this.gantt_start &&
-                    this.gantt_end &&
-                    this.config.custom_marker_date >= this.gantt_start &&
-                    this.config.custom_marker_date <= this.gantt_end
-                ) {
-                    this.highlight_custom(this.config.custom_marker_date);
-                    if (this.$custom_highlight) {
-                        this.$custom_highlight.style.display = 'block';
-                    }
-                    if (this.$custom_ball_highlight) {
-                        this.$custom_ball_highlight.style.display = 'block';
-                    }
-                    console.log('Restored custom highlight');
-                } else {
-                    console.warn('Invalid custom_marker_date for highlight', {
-                        custom_marker_date: this.config.custom_marker_date,
-                        gantt_start: this.gantt_start,
-                        gantt_end: this.gantt_end,
-                    });
+                    this.$animated_ball_highlight.style.animationPlayState =
+                        'paused';
                 }
 
                 this.trigger_event('finish', []);
-                console.log('Triggered finish event');
             }
         } catch (error) {
             console.error('Error in handle_animation_end:', error);
@@ -2469,9 +2320,9 @@ export default class Gantt {
         this.$header?.remove?.();
         this.$side_header?.remove?.();
         this.$current_highlight?.remove?.();
-        this.$custom_highlight?.remove?.();
+        // this.$custom_highlight?.remove?.();
         this.$current_ball_highlight?.remove?.();
-        this.$custom_ball_highlight?.remove?.();
+        // this.$custom_ball_highlight?.remove?.();
         // this.$animated_highlight?.remove?.();
         // this.$animated_ball_highlight?.remove?.();
         this.$extras?.remove?.();
