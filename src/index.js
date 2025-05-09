@@ -356,7 +356,6 @@ export default class Gantt {
 
     render() {
         try {
-            // Validate critical state before rendering
             if (!this.gantt_start || !this.gantt_end) {
                 console.error('Invalid gantt_start or gantt_end', {
                     gantt_start: this.gantt_start,
@@ -366,7 +365,7 @@ export default class Gantt {
             }
             if (!this.config.custom_marker_date) {
                 this.config.custom_marker_date = new Date(
-                    this.options.custom_marker_init_date || Date.now(),
+                    this.options.custom_marker_init_date || this.gantt_start,
                 );
             }
             if (
@@ -391,6 +390,21 @@ export default class Gantt {
             this.map_arrows_on_bars();
             this.set_dimensions();
             this.set_scroll_position(this.options.scroll_to);
+
+            // Ensure animated highlights are correctly positioned after render
+            if (this.options.custom_marker) {
+                const diff = date_utils.diff(
+                    this.config.custom_marker_date,
+                    this.gantt_start,
+                    this.config.unit,
+                );
+                const left =
+                    (diff / this.config.step) * this.config.column_width;
+                this.play_animated_highlight(
+                    left,
+                    this.config.custom_marker_date,
+                );
+            }
         } catch (error) {
             console.error('Error during render:', error);
         }
@@ -814,7 +828,21 @@ export default class Gantt {
 
         this.highlight_current();
         if (this.options.custom_marker) {
-            // Initialize animated highlight at custom_marker_date in paused state
+            // Ensure custom_marker_date is valid
+            if (
+                !this.config.custom_marker_date ||
+                isNaN(this.config.custom_marker_date)
+            ) {
+                this.config.custom_marker_date = new Date(
+                    this.options.custom_marker_init_date || this.gantt_start,
+                );
+            }
+            if (
+                this.config.custom_marker_date < this.gantt_start ||
+                this.config.custom_marker_date > this.gantt_end
+            ) {
+                this.config.custom_marker_date = new Date(this.gantt_start);
+            }
             const diff = date_utils.diff(
                 this.config.custom_marker_date,
                 this.gantt_start,
@@ -829,21 +857,29 @@ export default class Gantt {
         let adjustedLeft = left;
         let adjustedDateObj = dateObj;
         if (!dateObj || isNaN(left) || left === 0) {
+            adjustedDateObj =
+                this.config.custom_marker_date || new Date(this.gantt_start);
             adjustedLeft =
                 (date_utils.diff(
-                    this.config.custom_marker_date,
+                    adjustedDateObj,
                     this.gantt_start,
                     this.config.unit,
                 ) /
                     this.config.step) *
                 this.config.column_width;
-            adjustedDateObj = this.config.custom_marker_date || new Date();
         }
 
-        let gridHeight = 1152;
-        const gridElement = this.$svg.querySelector('.grid');
+        // Calculate grid height dynamically
+        let gridHeight = this.grid_height || 1152;
+        const gridElement = this.$svg.querySelector('.grid-background');
         if (gridElement) {
-            gridHeight = gridElement.getBoundingClientRect().height;
+            gridHeight =
+                parseFloat(gridElement.getAttribute('height')) || gridHeight;
+        } else {
+            console.warn(
+                'Grid element not found, using default height:',
+                gridHeight,
+            );
         }
 
         // Create or update animated highlight
@@ -1005,7 +1041,7 @@ export default class Gantt {
 
     reset_play() {
         this.config.custom_marker_date = new Date(
-            this.options.custom_marker_init_date,
+            this.options.custom_marker_init_date || this.gantt_start,
         );
         this.options.player_state = false;
         this.overlapping_tasks.clear();
@@ -1024,25 +1060,16 @@ export default class Gantt {
             this.$player_button.textContent = 'Play';
         }
 
-        // Reset animated highlight position and pause
-        if (this.$animated_highlight && this.$animated_ball_highlight) {
-            const diff = date_utils.diff(
-                this.config.custom_marker_date,
-                this.gantt_start,
-                this.config.unit,
-            );
-            const left = (diff / this.config.step) * this.config.column_width;
-            this.$animated_highlight.style.left = `${left}px`;
-            this.$animated_ball_highlight.style.left = `${left - 2}px`;
-            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
-                (el) => {
-                    el.style.animation = 'none';
-                    el.style.animationPlayState = 'paused';
-                },
-            );
-        }
-
+        // Preserve animated highlights and update their position
         this.render();
+        const diff = date_utils.diff(
+            this.config.custom_marker_date,
+            this.gantt_start,
+            this.config.unit,
+        );
+        const left = (diff / this.config.step) * this.config.column_width;
+        this.play_animated_highlight(left, this.config.custom_marker_date);
+
         this.trigger_event('reset', []);
     }
 
@@ -2327,6 +2354,14 @@ export default class Gantt {
         // this.$animated_ball_highlight?.remove?.();
         this.$extras?.remove?.();
         this.popup?.hide?.();
+        if (this.$animated_highlight) {
+            this.$animated_highlight.remove();
+            this.$animated_highlight = null;
+        }
+        if (this.$animated_ball_highlight) {
+            this.$animated_ball_highlight.remove();
+            this.$animated_ball_highlight = null;
+        }
     }
 }
 
