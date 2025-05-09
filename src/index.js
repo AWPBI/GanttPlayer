@@ -2542,8 +2542,8 @@ export default class Gantt {
         this.$custom_highlight?.remove?.();
         this.$current_ball_highlight?.remove?.();
         this.$custom_ball_highlight?.remove?.();
-        this.$animated_highlight?.remove?.();
-        this.$animated_ball_highlight?.remove?.();
+        // this.$animated_highlight?.remove?.();
+        // this.$animated_ball_highlight?.remove?.();
         this.$extras?.remove?.();
         this.popup?.hide?.();
     }
