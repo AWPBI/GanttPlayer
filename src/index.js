@@ -888,14 +888,14 @@ export default class Gantt {
                 top: this.config.header_height,
                 left: adjustedLeft,
                 width: 2,
-                height: gridHeight,
+                height: gridHeight - this.config.header_height,
                 classes: 'animated-highlight',
                 append_to: this.$container,
                 style: 'background: var(--g-custom-highlight); z-index: 999;',
             });
         } else {
             this.$animated_highlight.style.left = `${adjustedLeft}px`;
-            this.$animated_highlight.style.height = `${gridHeight}px`;
+            this.$animated_highlight.style.height = `${gridHeight - this.config.header_height}px`;
         }
 
         // Create or update animated ball highlight
