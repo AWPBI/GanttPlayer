@@ -885,11 +885,11 @@ export default class Gantt {
         if (!highlightDimensions || !highlightDimensionsCustom) return;
 
         // Toggle highlights based on player state
+        this.play_animated_highlight(
+            highlightDimensions.left,
+            highlightDimensions.dateObj,
+        );
         if (this.options.player_state) {
-            this.play_animated_highlight(
-                highlightDimensions.left,
-                highlightDimensions.dateObj,
-            );
             // Hide custom highlight when playing
             if (this.$custom_highlight)
                 this.$custom_highlight.style.display = 'none';
@@ -989,7 +989,7 @@ export default class Gantt {
         }
 
         // Check if animation should proceed
-        let shouldAnimate = true;
+        let shouldAnimate = this.options.player_state;
         let animationDuration = (this.options.player_interval || 1000) / 1000;
         let moveDistance = this.config.column_width;
 
