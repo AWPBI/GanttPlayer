@@ -372,11 +372,6 @@ export default class Gantt {
                 this.config.custom_marker_date < this.gantt_start ||
                 this.config.custom_marker_date > this.gantt_end
             ) {
-                console.warn('custom_marker_date out of bounds, resetting', {
-                    custom_marker_date: this.config.custom_marker_date,
-                    gantt_start: this.gantt_start,
-                    gantt_end: this.gantt_end,
-                });
                 this.config.custom_marker_date = new Date(this.gantt_start);
             }
 
@@ -1354,9 +1349,6 @@ export default class Gantt {
             taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
             // Validate taskY; if 0, calculate based on index
             if (taskY === 0) {
-                console.warn(
-                    `Invalid y attribute for task "${targetTask.id}", calculating from index`,
-                );
                 taskY =
                     this.config.header_height +
                     targetTask._index *
@@ -1364,9 +1356,6 @@ export default class Gantt {
             }
         } else {
             // Fallback: calculate y based on task index
-            console.warn(
-                `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
-            );
             taskY =
                 this.config.header_height +
                 targetTask._index *
@@ -1500,7 +1489,6 @@ export default class Gantt {
         if (this.scrollAnimationFrame) {
             cancelAnimationFrame(this.scrollAnimationFrame);
             this.scrollAnimationFrame = null;
-            console.log('Canceled existing scrollAnimationFrame');
         }
 
         // Exit if player is not active
@@ -1567,9 +1555,6 @@ export default class Gantt {
                         taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
                         // Validate taskY; if 0, calculate based on index
                         if (taskY === 0) {
-                            console.warn(
-                                `Invalid y attribute for task "${targetTask.id}", calculating from index`,
-                            );
                             taskY =
                                 this.config.header_height +
                                 targetTask._index *
@@ -1578,9 +1563,6 @@ export default class Gantt {
                         }
                     } else {
                         // Fallback: calculate y based on task index
-                        console.warn(
-                            `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
-                        );
                         taskY =
                             this.config.header_height +
                             targetTask._index *
@@ -1608,9 +1590,6 @@ export default class Gantt {
                     if (barWrapper) {
                         taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
                         if (taskY === 0) {
-                            console.warn(
-                                `Invalid y attribute for task "${targetTask.id}", calculating from index`,
-                            );
                             taskY =
                                 this.config.header_height +
                                 targetTask._index *
@@ -1618,9 +1597,6 @@ export default class Gantt {
                                         this.options.padding);
                         }
                     } else {
-                        console.warn(
-                            `Bar wrapper for task "${targetTask.id}" not found, calculating from index`,
-                        );
                         taskY =
                             this.config.header_height +
                             targetTask._index *
@@ -1693,7 +1669,8 @@ export default class Gantt {
                 );
                 this.overlapping_tasks.clear();
                 this.lastTaskY = null;
-                this.render();
+                // this.render();
+                this.reset_play();
                 if (this.options.player_state) {
                     this.player_interval = setInterval(
                         this.player_update.bind(this),
@@ -2347,11 +2324,7 @@ export default class Gantt {
         this.$header?.remove?.();
         this.$side_header?.remove?.();
         this.$current_highlight?.remove?.();
-        // this.$custom_highlight?.remove?.();
         this.$current_ball_highlight?.remove?.();
-        // this.$custom_ball_highlight?.remove?.();
-        // this.$animated_highlight?.remove?.();
-        // this.$animated_ball_highlight?.remove?.();
         this.$extras?.remove?.();
         this.popup?.hide?.();
         if (this.$animated_highlight) {
