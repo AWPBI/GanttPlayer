@@ -1671,6 +1671,7 @@ export default class Gantt {
                 this.lastTaskY = null;
                 // this.render();
                 this.reset_play();
+                this.toggle_play();
                 if (this.options.player_state) {
                     this.player_interval = setInterval(
                         this.player_update.bind(this),
