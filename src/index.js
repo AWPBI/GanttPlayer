@@ -760,12 +760,6 @@ export default class Gantt {
     }
 
     highlight_custom(date) {
-        console.log('highlight_custom called with date:', date, {
-            gantt_start: this.gantt_start,
-            unit: this.config.unit,
-            step: this.config.step,
-            column_width: this.config.column_width,
-        });
         if (!date || !this.gantt_start || !this.config.unit) {
             console.error('Invalid inputs for highlight_custom:', {
                 date,
@@ -783,14 +777,7 @@ export default class Gantt {
         const gridElement = this.$svg.querySelector('.grid');
         if (gridElement) {
             gridHeight = gridElement.getBoundingClientRect().height;
-            console.log('Grid element height:', gridHeight);
-        } else {
-            console.warn(
-                'Grid element not found, using default height:',
-                gridHeight,
-            );
         }
-
         // Create or update custom highlight
         if (!this.$custom_highlight) {
             this.$custom_highlight = this.create_el({
@@ -1154,14 +1141,14 @@ export default class Gantt {
         }
 
         // Remove animated highlight, show custom highlight
-        // if (this.$animated_highlight) {
-        //     this.$animated_highlight.remove();
-        //     this.$animated_highlight = null;
-        // }
-        // if (this.$animated_ball_highlight) {
-        //     this.$animated_ball_highlight.remove();
-        //     this.$animated_ball_highlight = null;
-        // }
+        if (this.$animated_highlight) {
+            this.$animated_highlight.remove();
+            this.$animated_highlight = null;
+        }
+        if (this.$animated_ball_highlight) {
+            this.$animated_ball_highlight.remove();
+            this.$animated_ball_highlight = null;
+        }
         if (this.$custom_highlight)
             this.$custom_highlight.style.display = 'block';
         if (this.$custom_ball_highlight)
@@ -1495,28 +1482,9 @@ export default class Gantt {
             top: clampedScrollTop,
             behavior: 'smooth',
         });
-
-        console.log('scroll_to_latest_task', {
-            taskId: targetTask.id,
-            taskY,
-            adjustedY,
-            viewportHeight,
-            offset,
-            targetScrollTop,
-            clampedScrollTop,
-            maxScrollTop,
-            activeTaskCount: activeTasks.length,
-        });
     }
 
     player_update() {
-        console.log('player_update called', {
-            player_state: this.options.player_state,
-            custom_marker_date: this.config.custom_marker_date,
-            player_end_date: this.config.player_end_date,
-        });
-
-        // Exit if player is not active
         if (!this.options.player_state) {
             console.log('player_update exited: player_state is false');
             return;
@@ -1614,8 +1582,6 @@ export default class Gantt {
     }
 
     start_scroll_animation(startLeft) {
-        console.log('start_scroll_animation called', { startLeft });
-
         // Cancel any existing animation frame
         if (this.scrollAnimationFrame) {
             cancelAnimationFrame(this.scrollAnimationFrame);
@@ -1640,11 +1606,6 @@ export default class Gantt {
         const offset = viewportWidth / 6;
 
         const animateScroll = (currentTime) => {
-            console.log('animateScroll running', {
-                currentTime,
-                player_state: this.options.player_state,
-            });
-
             // Exit if player is not active
             if (!this.options.player_state) {
                 console.log('animateScroll exited: player_state is false');
@@ -1718,7 +1679,6 @@ export default class Gantt {
                 } else if (this.lastTaskY !== null) {
                     // Use the last known taskY during gaps
                     taskY = this.lastTaskY;
-                    console.log(`No active tasks, using lastTaskY: ${taskY}`);
                 } else {
                     // Fallback: use the task with the earliest start
                     const targetTask = this.tasks.reduce(
@@ -1775,25 +1735,6 @@ export default class Gantt {
 
                 // Update vertical scroll position
                 container.scrollTop = clampedScrollTop;
-
-                console.log('animateScroll vertical scroll', {
-                    taskId: activeTasks.length
-                        ? activeTasks.reduce(
-                              (min, task) =>
-                                  task._index < min._index ? task : min,
-                              activeTasks[0],
-                          ).id
-                        : 'none',
-                    taskY,
-                    adjustedY,
-                    viewportHeight,
-                    verticalOffset,
-                    targetScrollTop,
-                    clampedScrollTop,
-                    maxScrollTop,
-                    activeTaskCount: activeTasks.length,
-                    lastTaskY: this.lastTaskY,
-                });
             }
 
             // Check if animation should continue
@@ -1810,11 +1751,6 @@ export default class Gantt {
                 this.scrollAnimationFrame =
                     requestAnimationFrame(animateScroll);
             } else {
-                // Animation complete or end date reached
-                console.log('animateScroll stopping', {
-                    progress,
-                    isBeyondEnd,
-                });
                 this.scrollAnimationFrame = null;
                 if (isBeyondEnd) {
                     this.handle_animation_end();
@@ -1824,15 +1760,9 @@ export default class Gantt {
 
         // Start animation
         this.scrollAnimationFrame = requestAnimationFrame(animateScroll);
-        console.log('Started new scrollAnimationFrame');
     }
 
     handle_animation_end() {
-        console.log('handle_animation_end called', {
-            player_state: this.options.player_state,
-            custom_marker_date: this.config.custom_marker_date,
-        });
-
         try {
             // Clear intervals and animation frames
             if (this.player_interval) {
