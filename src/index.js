@@ -1672,12 +1672,12 @@ export default class Gantt {
                 // this.render();
                 this.reset_play();
                 this.toggle_play();
-                if (this.options.player_state) {
-                    this.player_interval = setInterval(
-                        this.player_update.bind(this),
-                        this.options.player_interval || 1000,
-                    );
-                }
+                // if (this.options.player_state) {
+                //     this.player_interval = setInterval(
+                //         this.player_update.bind(this),
+                //         this.options.player_interval || 1000,
+                //     );
+                // }
             } else {
                 this.options.player_state = false;
                 this.overlapping_tasks.clear();
