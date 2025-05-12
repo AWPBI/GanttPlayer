@@ -15,14 +15,15 @@ export default class Gantt {
         this.setup_options(options);
         this.setup_tasks(tasks);
         this.overlapping_tasks = new Set();
+        this.lastTaskY = null; // Track last known y position
         this.change_view_mode();
         this.bind_events();
+        this.scrollAnimationFrame = null; // Track animation frame
     }
 
     setup_wrapper(element) {
         let svg_element, wrapper_element;
 
-        // CSS Selector is passed
         if (typeof element === 'string') {
             let el = document.querySelector(element);
             if (!el) {
@@ -33,7 +34,6 @@ export default class Gantt {
             element = el;
         }
 
-        // get the SVGElement
         if (element instanceof HTMLElement) {
             wrapper_element = element;
             svg_element = element.querySelector('svg');
@@ -42,13 +42,11 @@ export default class Gantt {
         } else {
             throw new TypeError(
                 'Frappe Gantt only supports usage of a string CSS selector,' +
-                " HTML DOM element or SVG DOM element for the 'element' parameter",
+                    " HTML DOM element or SVG DOM element for the 'element' parameter",
             );
         }
 
-        // svg element
         if (!svg_element) {
-            // create it
             this.$svg = createSVG('svg', {
                 append_to: wrapper_element,
                 class: 'gantt',
@@ -58,7 +56,6 @@ export default class Gantt {
             this.$svg.classList.add('gantt');
         }
 
-        // wrapper element
         this.$container = this.create_el({
             classes: 'gantt-container',
             append_to: this.$svg.parentElement,
@@ -99,14 +96,18 @@ export default class Gantt {
             this.options.player_state = false;
         }
         if (this.options.custom_marker) {
-            this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
+            this.config.custom_marker_date = new Date(
+                this.options.custom_marker_init_date,
+            );
         }
         if (this.options.player_end_date) {
-            this.config.player_end_date = new Date(this.options.player_end_date);
+            this.config.player_end_date = new Date(
+                this.options.player_end_date,
+            );
         }
         if (typeof this.options.ignore !== 'function') {
             if (typeof this.options.ignore === 'string')
-                this.options.ignore = [this.options.ignord];
+                this.options.ignore = [this.options.ignore];
             for (let option of this.options.ignore) {
                 if (typeof option === 'function') {
                     this.config.ignored_function = option;
@@ -127,7 +128,7 @@ export default class Gantt {
     update_options(options) {
         this.setup_options({ ...this.original_options, ...options });
         this.change_view_mode(undefined, true);
-        clearInterval(this.player_interval)
+        clearInterval(this.player_interval);
     }
 
     setup_tasks(tasks) {
@@ -165,7 +166,6 @@ export default class Gantt {
                     return false;
                 }
 
-                // make task invalid if duration too large
                 if (date_utils.diff(task._end, task._start, 'year') > 10) {
                     console.error(
                         `the duration of task "${task.id}" is too long (above ten years)`,
@@ -173,17 +173,13 @@ export default class Gantt {
                     return false;
                 }
 
-                // cache index
                 task._index = i;
 
-                // if hours is not set, assume the last day is full day
-                // e.g: 2018-09-09 becomes 2018-09-09 23:59:59
                 const task_end_values = date_utils.get_date_values(task._end);
                 if (task_end_values.slice(3).every((d) => d === 0)) {
                     task._end = date_utils.add(task._end, 24, 'hour');
                 }
 
-                // dependencies
                 if (
                     typeof task.dependencies === 'string' ||
                     !task.dependencies
@@ -198,7 +194,6 @@ export default class Gantt {
                     task.dependencies = deps;
                 }
 
-                // uids
                 if (!task.id) {
                     task.id = generate_id(task);
                 } else if (typeof task.id === 'string') {
@@ -211,6 +206,7 @@ export default class Gantt {
             })
             .filter((t) => t);
         this.setup_dependencies();
+        this.scroll_to_latest_task(); // Scroll to the latest task after setup
     }
 
     setup_dependencies() {
@@ -226,6 +222,7 @@ export default class Gantt {
     refresh(tasks) {
         this.setup_tasks(tasks);
         this.change_view_mode();
+        this.scroll_to_latest_task(); // Scroll to the latest task after refresh
     }
 
     update_task(id, new_details) {
@@ -358,22 +355,59 @@ export default class Gantt {
     }
 
     render() {
-        this.clear();
-        this.setup_layers();
-        this.make_grid();
-        this.make_dates();
-        this.make_grid_extras();
-        this.make_bars();
-        this.make_arrows();
-        this.map_arrows_on_bars();
-        this.set_dimensions();
-        this.set_scroll_position(this.options.scroll_to);
+        try {
+            if (!this.gantt_start || !this.gantt_end) {
+                console.error('Invalid gantt_start or gantt_end', {
+                    gantt_start: this.gantt_start,
+                    gantt_end: this.gantt_end,
+                });
+                return;
+            }
+            if (!this.config.custom_marker_date) {
+                this.config.custom_marker_date = new Date(
+                    this.options.custom_marker_init_date || this.gantt_start,
+                );
+            }
+            if (
+                this.config.custom_marker_date < this.gantt_start ||
+                this.config.custom_marker_date > this.gantt_end
+            ) {
+                this.config.custom_marker_date = new Date(this.gantt_start);
+            }
+
+            this.clear();
+            this.setup_layers();
+            this.make_grid();
+            this.make_dates();
+            this.make_grid_extras();
+            this.make_bars();
+            this.make_arrows();
+            this.map_arrows_on_bars();
+            this.set_dimensions();
+            this.set_scroll_position(this.options.scroll_to);
+
+            // Ensure animated highlights are correctly positioned after render
+            if (this.options.custom_marker) {
+                const diff = date_utils.diff(
+                    this.config.custom_marker_date,
+                    this.gantt_start,
+                    this.config.unit,
+                );
+                const left =
+                    (diff / this.config.step) * this.config.column_width;
+                this.play_animated_highlight(
+                    left,
+                    this.config.custom_marker_date,
+                );
+            }
+        } catch (error) {
+            console.error('Error during render:', error);
+        }
     }
 
     setup_layers() {
         this.layers = {};
         const layers = ['grid', 'arrow', 'progress', 'bar'];
-        // make group layers
         for (let layer of layers) {
             this.layers[layer] = createSVG('g', {
                 class: layer,
@@ -389,7 +423,7 @@ export default class Gantt {
             append_to: this.$extras,
             type: 'button',
         });
-        this.$adjust.innerHTML = '&larr;';
+        this.$adjust.innerHTML = '←';
     }
 
     make_grid() {
@@ -408,10 +442,10 @@ export default class Gantt {
         const grid_width = this.dates.length * this.config.column_width;
         const grid_height = Math.max(
             this.config.header_height +
-            this.options.padding +
-            (this.options.bar_height + this.options.padding) *
-            this.tasks.length -
-            10,
+                this.options.padding +
+                (this.options.bar_height + this.options.padding) *
+                    this.tasks.length -
+                10,
             this.options.container_height !== 'auto'
                 ? this.options.container_height
                 : 0,
@@ -479,7 +513,6 @@ export default class Gantt {
         this.$side_header = this.create_el({ classes: 'side-header' });
         this.$upper_header.prepend(this.$side_header);
 
-        // Create view mode change select
         if (this.options.view_mode_select) {
             const $select = document.createElement('select');
             $select.classList.add('viewmode-select');
@@ -508,7 +541,6 @@ export default class Gantt {
             this.$side_header.appendChild($select);
         }
 
-        // Create today button
         if (this.options.today_button) {
             let $today_button = document.createElement('button');
             $today_button.classList.add('today-button');
@@ -518,34 +550,29 @@ export default class Gantt {
             this.$today_button = $today_button;
         }
 
-        // Create player reset button
         if (this.options.player_button) {
             let player_reset_button = document.createElement('button');
             player_reset_button.classList.add('player-reset-button');
             if (this.options.player_use_fa) {
                 player_reset_button.classList.add('fas', 'fa-redo');
-            }
-            else {
-                player_reset_button.textContent = "Reset"//❚❚
+            } else {
+                player_reset_button.textContent = 'Reset';
             }
             player_reset_button.onclick = this.reset_play.bind(this);
             this.$side_header.prepend(player_reset_button);
             this.$player_reset_button = player_reset_button;
         }
 
-        // Create player button
         if (this.options.player_button) {
             let $player_button = document.createElement('button');
             $player_button.classList.add('player-button');
             if (this.options.player_use_fa) {
-                $player_button.classList.add('fas')
+                $player_button.classList.add('fas');
                 if (this.options.player_state)
-                    $player_button.classList.add('fa-pause')
-                else
-                    $player_button.classList.add('fa-play')
-            }
-            else {
-                $player_button.textContent = "Play";
+                    $player_button.classList.add('fa-pause');
+                else $player_button.classList.add('fa-play');
+            } else {
+                $player_button.textContent = 'Play';
             }
             $player_button.onclick = this.toggle_play.bind(this);
             this.$side_header.prepend($player_button);
@@ -705,11 +732,6 @@ export default class Gantt {
         }
     }
 
-    /**
-     * Compute the horizontal x-axis distance and associated date for the current date and view.
-     *
-     * @returns Object containing the x-axis distance and date of the current date, or null if the current date is out of the gantt range.
-     */
     highlight_current() {
         const res = this.get_closest_date();
         if (!res) return null;
@@ -743,48 +765,15 @@ export default class Gantt {
             classes: 'current-ball-highlight',
             append_to: this.$header,
         });
-        return { left, dateObj }
+        return { left, dateObj };
     }
 
-    /**
-     * Compute the horizontal x-axis distance and associated date for the custom date and view.
-     *
-     * @returns Object containing the x-axis distance and date of the custom date, or null if the custom date is out of the gantt range.
-     */
     highlight_custom(date) {
-        const res = this.get_closest_date_to(date);
-        if (!res) return null;
-
-        const [_, el] = res;
-        el.classList.add('custom-date-highlight');
-
-        const dateObj = date;
-
-        const diff_in_units = date_utils.diff(
-            dateObj,
-            this.gantt_start,
-            this.config.unit,
+        // Deprecated: No longer used as we rely solely on animated-highlight
+        console.warn(
+            'highlight_custom is deprecated; using animated-highlight instead',
         );
-
-        const left =
-            (diff_in_units / this.config.step) * this.config.column_width;
-
-        this.$custom_highlight = this.create_el({
-            top: this.config.header_height,
-            left,
-            height: this.grid_height - this.config.header_height,
-            classes: 'custom-highlight',
-            append_to: this.$container,
-        });
-        this.$custom_ball_highlight = this.create_el({
-            top: this.config.header_height - 6,
-            left: left - 2.5,
-            width: 6,
-            height: 6,
-            classes: 'custom-ball-highlight',
-            append_to: this.$header,
-        });
-        return { left, dateObj }
+        return this.play_animated_highlight(0, date);
     }
 
     make_grid_highlights() {
@@ -832,26 +821,273 @@ export default class Gantt {
             });
         }
 
-        const highlightDimensions = this.highlight_current();
-
-        let highlightDimensionsCustom;
+        this.highlight_current();
         if (this.options.custom_marker) {
-            highlightDimensionsCustom = this.highlight_custom(
-                this.config.custom_marker_date
+            // Ensure custom_marker_date is valid
+            if (
+                !this.config.custom_marker_date ||
+                isNaN(this.config.custom_marker_date)
+            ) {
+                this.config.custom_marker_date = new Date(
+                    this.options.custom_marker_init_date || this.gantt_start,
+                );
+            }
+            if (
+                this.config.custom_marker_date < this.gantt_start ||
+                this.config.custom_marker_date > this.gantt_end
+            ) {
+                this.config.custom_marker_date = new Date(this.gantt_start);
+            }
+            const diff = date_utils.diff(
+                this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
             );
-
+            const left = (diff / this.config.step) * this.config.column_width;
+            this.play_animated_highlight(left, this.config.custom_marker_date);
         }
-        if (!highlightDimensions || !highlightDimensionsCustom) return;
     }
 
-    create_el({ left, top, width, height, id, classes, append_to, type }) {
+    play_animated_highlight(left, dateObj) {
+        let adjustedLeft = left;
+        let adjustedDateObj = dateObj;
+        if (!dateObj || isNaN(left) || left === 0) {
+            adjustedDateObj =
+                this.config.custom_marker_date || new Date(this.gantt_start);
+            adjustedLeft =
+                (date_utils.diff(
+                    adjustedDateObj,
+                    this.gantt_start,
+                    this.config.unit,
+                ) /
+                    this.config.step) *
+                this.config.column_width;
+        }
+
+        // Calculate grid height dynamically
+        let gridHeight = this.grid_height || 1152;
+        const gridElement = this.$svg.querySelector('.grid-background');
+        if (gridElement) {
+            gridHeight =
+                parseFloat(gridElement.getAttribute('height')) || gridHeight;
+        } else {
+            console.warn(
+                'Grid element not found, using default height:',
+                gridHeight,
+            );
+        }
+
+        // Create or update animated highlight
+        if (!this.$animated_highlight) {
+            this.$animated_highlight = this.create_el({
+                top: this.config.header_height,
+                left: adjustedLeft,
+                width: 2,
+                height: gridHeight - this.config.header_height,
+                classes: 'animated-highlight',
+                append_to: this.$container,
+                style: 'background: var(--g-custom-highlight); z-index: 999;',
+            });
+        } else {
+            this.$animated_highlight.style.left = `${adjustedLeft}px`;
+            this.$animated_highlight.style.height = `${gridHeight - this.config.header_height}px`;
+        }
+
+        // Create or update animated ball highlight
+        if (!this.$animated_ball_highlight) {
+            this.$animated_ball_highlight = this.create_el({
+                top: this.config.header_height - 6,
+                left: adjustedLeft - 2,
+                width: 6,
+                height: 6,
+                classes: 'animated-ball-highlight',
+                append_to: this.$header,
+                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
+            });
+        } else {
+            this.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
+        }
+
+        // Set animation properties only if player_state is true
+        if (this.options.player_state) {
+            let animationDuration =
+                (this.options.player_interval || 1000) / 1000;
+            let moveDistance = this.config.column_width;
+
+            if (
+                this.config.player_end_date &&
+                adjustedDateObj >= this.config.player_end_date
+            ) {
+                return {
+                    left: adjustedLeft,
+                    dateObj: adjustedDateObj,
+                };
+            } else if (
+                this.config.player_end_date &&
+                date_utils.add(
+                    adjustedDateObj,
+                    this.config.step,
+                    this.config.unit,
+                ) > this.config.player_end_date
+            ) {
+                const remainingTime = date_utils.diff(
+                    this.config.player_end_date,
+                    adjustedDateObj,
+                    'millisecond',
+                );
+                animationDuration =
+                    remainingTime / (this.options.player_interval || 1000);
+                const totalUnits = date_utils.diff(
+                    this.config.player_end_date,
+                    this.gantt_start,
+                    this.config.unit,
+                );
+                const endLeft =
+                    (totalUnits / this.config.step) * this.config.column_width;
+                moveDistance = endLeft - adjustedLeft;
+            }
+
+            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
+                (el) => {
+                    el.style.setProperty(
+                        '--animation-duration',
+                        `${animationDuration}s`,
+                    );
+                    el.style.setProperty(
+                        '--move-distance',
+                        `${moveDistance}px`,
+                    );
+                    el.style.animation = `none`;
+                    el.offsetHeight;
+                    el.style.animation = `moveRight ${animationDuration}s linear forwards`;
+                    el.style.animationPlayState = 'running';
+                },
+            );
+        } else {
+            // Ensure animation is paused
+            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
+                (el) => {
+                    el.style.animation = 'none';
+                    el.style.animationPlayState = 'paused';
+                },
+            );
+        }
+
+        return {
+            left: adjustedLeft,
+            dateObj: adjustedDateObj,
+        };
+    }
+
+    toggle_play() {
+        if (!this.config.custom_marker_date) {
+            this.config.custom_marker_date =
+                this.options.custom_marker_init_date || new Date();
+        }
+        this.options.player_state = !this.options.player_state;
+        if (this.options.player_state) {
+            this.player_interval = setInterval(
+                this.player_update.bind(this),
+                this.options.player_interval || 1000,
+            );
+            this.trigger_event('start', []);
+
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-play');
+                this.$player_button.classList.add('fa-pause');
+            } else {
+                this.$player_button.textContent = 'Pause';
+            }
+
+            // Update animated highlight to start animation
+            const diff = date_utils.diff(
+                this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
+            );
+            const left = (diff / this.config.step) * this.config.column_width;
+            this.play_animated_highlight(left, this.config.custom_marker_date);
+        } else {
+            clearInterval(this.player_interval);
+            this.player_interval = null;
+            if (this.scrollAnimationFrame) {
+                cancelAnimationFrame(this.scrollAnimationFrame);
+                this.scrollAnimationFrame = null;
+            }
+            this.trigger_event('pause', []);
+
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-pause');
+                this.$player_button.classList.add('fa-play');
+            } else {
+                this.$player_button.textContent = 'Play';
+            }
+
+            // Pause animation
+            if (this.$animated_highlight) {
+                this.$animated_highlight.style.animationPlayState = 'paused';
+            }
+            if (this.$animated_ball_highlight) {
+                this.$animated_ball_highlight.style.animationPlayState =
+                    'paused';
+            }
+        }
+    }
+
+    reset_play() {
+        this.config.custom_marker_date = new Date(
+            this.options.custom_marker_init_date || this.gantt_start,
+        );
+        this.options.player_state = false;
+        this.overlapping_tasks.clear();
+        this.lastTaskY = null;
+        clearInterval(this.player_interval);
+        this.player_interval = null;
+        if (this.scrollAnimationFrame) {
+            cancelAnimationFrame(this.scrollAnimationFrame);
+            this.scrollAnimationFrame = null;
+        }
+
+        if (this.options.player_use_fa) {
+            this.$player_button.classList.remove('fa-pause');
+            this.$player_button.classList.add('fa-play');
+        } else {
+            this.$player_button.textContent = 'Play';
+        }
+
+        // Preserve animated highlights and update their position
+        this.render();
+        const diff = date_utils.diff(
+            this.config.custom_marker_date,
+            this.gantt_start,
+            this.config.unit,
+        );
+        const left = (diff / this.config.step) * this.config.column_width;
+        this.play_animated_highlight(left, this.config.custom_marker_date);
+
+        this.trigger_event('reset', []);
+    }
+
+    create_el({
+        left,
+        top,
+        width,
+        height,
+        id,
+        classes,
+        append_to,
+        type,
+        style,
+    }) {
         let $el = document.createElement(type || 'div');
         for (let cls of classes.split(' ')) $el.classList.add(cls);
-        $el.style.top = top + 'px';
-        $el.style.left = left + 'px';
+        if (top !== undefined) $el.style.top = top + 'px';
+        if (left !== undefined) $el.style.left = left + 'px';
+
         if (id) $el.id = id;
         if (width) $el.style.width = width + 'px';
         if (height) $el.style.height = height + 'px';
+        if (style) $el.style.cssText = style;
         if (append_to) append_to.appendChild($el);
         return $el;
     }
@@ -963,13 +1199,13 @@ export default class Gantt {
                     if (!dependency) return;
                     const arrow = new Arrow(
                         this,
-                        this.bars[dependency._index], // from_task
-                        this.bars[task._index], // to_task
+                        this.bars[dependency._index],
+                        this.bars[task._index],
                     );
                     this.layers.arrow.appendChild(arrow.element);
                     return arrow;
                 })
-                .filter(Boolean); // filter falsy values
+                .filter(Boolean);
             this.arrows = this.arrows.concat(arrows);
         }
     }
@@ -1013,8 +1249,6 @@ export default class Gantt {
             date = date_utils.parse(date);
         }
 
-        // Weird bug where infinite padding results in one day offset in scroll
-        // Related to header-body displacement
         const units_since_first_task = date_utils.diff(
             date,
             this.gantt_start,
@@ -1029,7 +1263,6 @@ export default class Gantt {
             behavior: 'smooth',
         });
 
-        // Calculate current scroll position's upper text
         if (this.$current) {
             this.$current.classList.remove('current-upper');
         }
@@ -1049,11 +1282,10 @@ export default class Gantt {
             (el) => el.textContent === current_upper,
         );
 
-        // Recalculate
         this.current_date = date_utils.add(
             this.gantt_start,
             (this.$container.scrollLeft + $el.clientWidth) /
-            this.config.column_width,
+                this.config.column_width,
             this.config.unit,
         );
         current_upper = this.config.view_mode.upper_text(
@@ -1072,46 +1304,175 @@ export default class Gantt {
     }
 
     scroll_custom_marker() {
-        let res = this.get_closest_date_to(this.config.custom_marker_date);
-        if (res && res[0] < this.config.player_end_date) this.set_scroll_position(date_utils.add(res[0], -3, this.config.unit));
-        else {
-            if (this.options.player_loop) {
-                this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
-                let res = this.get_closest_date_to(this.config.custom_marker_date);
-                if (res) this.set_scroll_position(date_utils.add(res[0], -3, this.config.unit));
-            }
-            else {
-                this.options.player_state = false
-                this.overlapping_tasks.clear()
-                clearInterval(this.player_interval)
-            }
-            this.trigger_event('finish', []);
+        const res = this.get_closest_date_to(this.config.custom_marker_date);
+        if (!res) return;
+
+        // Scrolling is handled by start_scroll_animation in player_update
+        // Only handle end condition here
+        if (
+            this.config.player_end_date &&
+            res[0] >= this.config.player_end_date
+        ) {
+            this.handle_animation_end();
         }
     }
 
+    scroll_to_latest_task() {
+        if (!this.tasks.length) return;
+
+        // Find tasks active at the initial custom_marker_date (or use earliest start)
+        const currentDate = this.config.custom_marker_date || this.gantt_start;
+        const activeTasks = this.tasks.filter(
+            (task) => task._start <= currentDate && currentDate <= task._end,
+        );
+
+        // If no active tasks, fall back to the task with the earliest start
+        const targetTask = activeTasks.length
+            ? activeTasks.reduce(
+                  (min, task) => (task._index < min._index ? task : min),
+                  activeTasks[0],
+              )
+            : this.tasks.reduce(
+                  (earliest, task) =>
+                      task._start < earliest._start ? task : earliest,
+                  this.tasks[0],
+              );
+
+        // Find the corresponding bar-wrapper element
+        const barWrapper = this.$svg.querySelector(
+            `.bar-wrapper[data-id="${targetTask.id}"]`,
+        );
+
+        let taskY;
+        if (barWrapper) {
+            // Get the y attribute from the bar-wrapper
+            taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+            // Validate taskY; if 0, calculate based on index
+            if (taskY === 0) {
+                taskY =
+                    this.config.header_height +
+                    targetTask._index *
+                        (this.options.bar_height + this.options.padding);
+            }
+        } else {
+            // Fallback: calculate y based on task index
+            taskY =
+                this.config.header_height +
+                targetTask._index *
+                    (this.options.bar_height + this.options.padding);
+        }
+
+        // Store the initial taskY
+        this.lastTaskY = taskY;
+
+        // Adjust for header height to align with scroll container's coordinate system
+        const adjustedY = taskY - this.config.header_height;
+
+        // Calculate the desired scroll position to position the task near the top of the viewport
+        const viewportHeight = this.$container.clientHeight;
+        const offset = this.options.padding; // Small offset from top for visibility
+        let targetScrollTop = adjustedY - offset;
+
+        // Ensure scrollTop is within bounds
+        const maxScrollTop = this.$container.scrollHeight - viewportHeight;
+        const clampedScrollTop = Math.max(
+            0,
+            Math.min(targetScrollTop, maxScrollTop),
+        );
+
+        // Scroll to the calculated position
+        this.$container.scrollTo({
+            top: clampedScrollTop,
+            behavior: 'smooth',
+        });
+    }
+
     player_update() {
+        if (!this.options.player_state) {
+            console.log('player_update exited: player_state is false');
+            return;
+        }
+
+        // Check if we've reached or passed the end date
+        if (
+            this.config.player_end_date &&
+            this.config.custom_marker_date >= this.config.player_end_date
+        ) {
+            console.log('player_update: reached player_end_date, stopping');
+            this.handle_animation_end();
+            return;
+        }
+
+        // Increment custom marker date
         this.config.custom_marker_date = date_utils.add(
             this.config.custom_marker_date,
             this.config.step,
             this.config.unit,
         );
 
+        // Calculate new position
+        const diff_in_units = date_utils.diff(
+            this.config.custom_marker_date,
+            this.gantt_start,
+            this.config.unit,
+        );
+        const newLeft =
+            (diff_in_units / this.config.step) * this.config.column_width;
+
+        // Update animated highlight position
+        if (this.$animated_highlight && this.$animated_ball_highlight) {
+            // Reset animation to start from new position
+            this.$animated_highlight.style.left = `${newLeft}px`;
+            this.$animated_ball_highlight.style.left = `${newLeft - 2}px`;
+
+            const animationDuration =
+                (this.options.player_interval || 1000) / 1000;
+            const moveDistance = this.config.column_width;
+
+            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
+                (el) => {
+                    el.style.setProperty(
+                        '--animation-duration',
+                        `${animationDuration}s`,
+                    );
+                    el.style.setProperty(
+                        '--move-distance',
+                        `${moveDistance}px`,
+                    );
+                    el.style.animation = `none`; // Reset animation
+                    el.offsetHeight; // Trigger reflow
+                    el.style.animation = `moveRight ${animationDuration}s linear forwards`;
+                    el.style.animationPlayState = 'running';
+                },
+            );
+        }
+
+        // Handle overlapping tasks
         if (this.options.custom_marker) {
             const current_date = this.config.custom_marker_date;
             const new_overlapping = new Set(
-                this.tasks.filter(task => task._start <= current_date && current_date < task._end)
-                    .map(task => task.id)
+                this.tasks
+                    .filter(
+                        (task) =>
+                            task._start <= current_date &&
+                            current_date < task._end,
+                    )
+                    .map((task) => task.id),
             );
 
-            const entered_tasks = [...new_overlapping].filter(id => !this.overlapping_tasks.has(id));
-            const exited_tasks = [...this.overlapping_tasks].filter(id => !new_overlapping.has(id));
+            const entered_tasks = [...new_overlapping].filter(
+                (id) => !this.overlapping_tasks.has(id),
+            );
+            const exited_tasks = [...this.overlapping_tasks].filter(
+                (id) => !new_overlapping.has(id),
+            );
 
-            entered_tasks.forEach(id => {
+            entered_tasks.forEach((id) => {
                 const task = this.get_task(id);
                 this.trigger_event('bar_enter', [task]);
             });
 
-            exited_tasks.forEach(id => {
+            exited_tasks.forEach((id) => {
                 const task = this.get_task(id);
                 this.trigger_event('bar_exit', [task]);
             });
@@ -1119,38 +1480,235 @@ export default class Gantt {
             this.overlapping_tasks = new_overlapping;
         }
 
-        this.options.scroll_to = "custom";
-        this.render();
+        // Start smooth scrolling animation
+        this.start_scroll_animation(newLeft);
     }
 
-    toggle_play() {
-        this.options.player_state = !this.options.player_state
-        console.log("toggled", this.options.player_state)
-        if (this.options.player_state) {
-            this.player_interval = setInterval(this.player_update.bind(this), this.options.player_interval)
-            this.trigger_event('start', []);
-            if (this.options.player_use_fa) {
-                this.$player_button.classList.remove('fa-play')
-                this.$player_button.classList.add('fa-pause')
-            }
+    start_scroll_animation(startLeft) {
+        // Cancel any existing animation frame
+        if (this.scrollAnimationFrame) {
+            cancelAnimationFrame(this.scrollAnimationFrame);
+            this.scrollAnimationFrame = null;
         }
-        else {
-            if (this.options.player_use_fa) {
-                this.$player_button.classList.remove('fa-pause')
-                this.$player_button.classList.add('fa-play')
-            }
-            this.trigger_event('pause', []);
-            clearInterval(this.player_interval)
+
+        // Exit if player is not active
+        if (!this.options.player_state) {
+            console.log('start_scroll_animation exited: player_state is false');
+            return;
         }
+
+        const animationDuration = (this.options.player_interval || 1000) / 1000;
+        const moveDistance = this.config.column_width;
+        const startTime = performance.now();
+        const container = this.$container;
+        const viewportWidth = container.clientWidth;
+        const maxScroll = container.scrollWidth - viewportWidth;
+
+        // Desired offset to keep highlight in view (e.g., 1/6th of viewport from left)
+        const offset = viewportWidth / 6;
+
+        const animateScroll = (currentTime) => {
+            // Exit if player is not active
+            if (!this.options.player_state) {
+                console.log('animateScroll exited: player_state is false');
+                this.scrollAnimationFrame = null;
+                return;
+            }
+
+            const elapsed = (currentTime - startTime) / 1000; // Time in seconds
+            const progress = Math.min(elapsed / animationDuration, 1); // Animation progress [0,1]
+            const currentLeft = startLeft + moveDistance * progress; // Current highlight position
+
+            // Calculate desired scroll position to keep highlight in view
+            let targetScroll = currentLeft - offset;
+
+            // Clamp scroll position to chart bounds
+            targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
+
+            // Update horizontal scroll position
+            container.scrollLeft = targetScroll;
+
+            // Update vertical scroll to track the active task
+            if (this.tasks.length) {
+                // Find tasks active at the current custom_marker_date
+                const currentDate = this.config.custom_marker_date;
+                const activeTasks = this.tasks.filter(
+                    (task) =>
+                        task._start <= currentDate && currentDate <= task._end,
+                );
+
+                let taskY;
+                if (activeTasks.length) {
+                    // Select the task with the lowest _index (highest in chart)
+                    const targetTask = activeTasks.reduce(
+                        (min, task) => (task._index < min._index ? task : min),
+                        activeTasks[0],
+                    );
+
+                    // Find the corresponding bar-wrapper element
+                    const barWrapper = this.$svg.querySelector(
+                        `.bar-wrapper[data-id="${targetTask.id}"]`,
+                    );
+
+                    if (barWrapper) {
+                        // Get the y attribute from the bar-wrapper
+                        taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+                        // Validate taskY; if 0, calculate based on index
+                        if (taskY === 0) {
+                            taskY =
+                                this.config.header_height +
+                                targetTask._index *
+                                    (this.options.bar_height +
+                                        this.options.padding);
+                        }
+                    } else {
+                        // Fallback: calculate y based on task index
+                        taskY =
+                            this.config.header_height +
+                            targetTask._index *
+                                (this.options.bar_height +
+                                    this.options.padding);
+                    }
+
+                    // Update lastTaskY with the current task's y position
+                    this.lastTaskY = taskY;
+                } else if (this.lastTaskY !== null) {
+                    // Use the last known taskY during gaps
+                    taskY = this.lastTaskY;
+                } else {
+                    // Fallback: use the task with the earliest start
+                    const targetTask = this.tasks.reduce(
+                        (earliest, task) =>
+                            task._start < earliest._start ? task : earliest,
+                        this.tasks[0],
+                    );
+
+                    const barWrapper = this.$svg.querySelector(
+                        `.bar-wrapper[data-id="${targetTask.id}"]`,
+                    );
+
+                    if (barWrapper) {
+                        taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
+                        if (taskY === 0) {
+                            taskY =
+                                this.config.header_height +
+                                targetTask._index *
+                                    (this.options.bar_height +
+                                        this.options.padding);
+                        }
+                    } else {
+                        taskY =
+                            this.config.header_height +
+                            targetTask._index *
+                                (this.options.bar_height +
+                                    this.options.padding);
+                    }
+
+                    // Initialize lastTaskY
+                    this.lastTaskY = taskY;
+                }
+
+                // Adjust for header height to align with scroll container's coordinate system
+                const adjustedY = taskY - this.config.header_height;
+
+                // Calculate the desired scroll position to position the task near the top of the viewport
+                const viewportHeight = container.clientHeight;
+                const verticalOffset = this.options.padding; // Small offset from top for visibility
+                let targetScrollTop = adjustedY - verticalOffset;
+
+                // Ensure scrollTop is within bounds
+                const maxScrollTop = container.scrollHeight - viewportHeight;
+                const clampedScrollTop = Math.max(
+                    0,
+                    Math.min(targetScrollTop, maxScrollTop),
+                );
+
+                // Update vertical scroll position
+                container.scrollTop = clampedScrollTop;
+            }
+
+            // Check if animation should continue
+            const res = this.get_closest_date_to(
+                this.config.custom_marker_date,
+            );
+            const isBeyondEnd =
+                res && this.config.player_end_date
+                    ? res[0] >= this.config.player_end_date
+                    : false;
+
+            if (progress < 1 && !isBeyondEnd) {
+                // Continue animation
+                this.scrollAnimationFrame =
+                    requestAnimationFrame(animateScroll);
+            } else {
+                this.scrollAnimationFrame = null;
+                if (isBeyondEnd) {
+                    this.handle_animation_end();
+                }
+            }
+        };
+
+        // Start animation
+        this.scrollAnimationFrame = requestAnimationFrame(animateScroll);
     }
 
-    reset_play() {
-        this.config.custom_marker_date = new Date(this.options.custom_marker_init_date);
-        this.options.player_state = false
-        this.overlapping_tasks.clear()
-        clearInterval(this.player_interval)
-        this.render()
-        this.trigger_event('reset', []);
+    handle_animation_end() {
+        try {
+            if (this.player_interval) {
+                clearInterval(this.player_interval);
+                this.player_interval = null;
+            }
+            if (this.scrollAnimationFrame) {
+                cancelAnimationFrame(this.scrollAnimationFrame);
+                this.scrollAnimationFrame = null;
+            }
+
+            if (this.options.player_loop) {
+                this.config.custom_marker_date = new Date(
+                    this.options.custom_marker_init_date,
+                );
+                this.overlapping_tasks.clear();
+                this.lastTaskY = null;
+                // this.render();
+                this.reset_play();
+                this.toggle_play();
+                // if (this.options.player_state) {
+                //     this.player_interval = setInterval(
+                //         this.player_update.bind(this),
+                //         this.options.player_interval || 1000,
+                //     );
+                // }
+            } else {
+                this.options.player_state = false;
+                this.overlapping_tasks.clear();
+                this.lastTaskY = null;
+
+                if (this.$player_button) {
+                    if (this.options.player_use_fa) {
+                        this.$player_button.classList.remove('fa-pause');
+                        this.$player_button.classList.add('fa-play');
+                    } else {
+                        this.$player_button.textContent = 'Play';
+                    }
+                }
+
+                // Pause animated highlight
+                if (this.$animated_highlight) {
+                    this.$animated_highlight.style.animation = 'none';
+                    this.$animated_highlight.style.animationPlayState =
+                        'paused';
+                }
+                if (this.$animated_ball_highlight) {
+                    this.$animated_ball_highlight.style.animation = 'none';
+                    this.$animated_ball_highlight.style.animationPlayState =
+                        'paused';
+                }
+
+                this.trigger_event('finish', []);
+            }
+        } catch (error) {
+            console.error('Error in handle_animation_end:', error);
+        }
     }
 
     get_closest_date_to(date) {
@@ -1160,28 +1718,27 @@ export default class Gantt {
         let current = date,
             el = this.$container.querySelector(
                 '.date_' +
-                sanitize(
-                    date_utils.format(
-                        current,
-                        this.config.date_format,
-                        this.options.language,
+                    sanitize(
+                        date_utils.format(
+                            current,
+                            this.config.date_format,
+                            this.options.language,
+                        ),
                     ),
-                ),
             );
 
-        // safety check to prevent infinite loop
         let c = 0;
         while (!el && c < this.config.step) {
             current = date_utils.add(current, -1, this.config.unit);
             el = this.$container.querySelector(
                 '.date_' +
-                sanitize(
-                    date_utils.format(
-                        current,
-                        this.config.date_format,
-                        this.options.language,
+                    sanitize(
+                        date_utils.format(
+                            current,
+                            this.config.date_format,
+                            this.options.language,
+                        ),
                     ),
-                ),
             );
             c++;
         }
@@ -1204,28 +1761,27 @@ export default class Gantt {
         let current = new Date(),
             el = this.$container.querySelector(
                 '.date_' +
-                sanitize(
-                    date_utils.format(
-                        current,
-                        this.config.date_format,
-                        this.options.language,
+                    sanitize(
+                        date_utils.format(
+                            current,
+                            this.config.date_format,
+                            this.options.language,
+                        ),
                     ),
-                ),
             );
 
-        // safety check to prevent infinite loop
         let c = 0;
         while (!el && c < this.config.step) {
             current = date_utils.add(current, -1, this.config.unit);
             el = this.$container.querySelector(
                 '.date_' +
-                sanitize(
-                    date_utils.format(
-                        current,
-                        this.config.date_format,
-                        this.options.language,
+                    sanitize(
+                        date_utils.format(
+                            current,
+                            this.config.date_format,
+                            this.options.language,
+                        ),
                     ),
-                ),
             );
             c++;
         }
@@ -1300,7 +1856,7 @@ export default class Gantt {
         let is_resizing_left = false;
         let is_resizing_right = false;
         let parent_bar_id = null;
-        let bars = []; // instanceof Bar
+        let bars = [];
         this.bar_being_dragged = null;
 
         const action_in_progress = () =>
@@ -1384,9 +1940,9 @@ export default class Gantt {
                 if (
                     !extended &&
                     e.currentTarget.scrollWidth -
-                    (e.currentTarget.scrollLeft +
-                        e.currentTarget.clientWidth) <=
-                    trigger
+                        (e.currentTarget.scrollLeft +
+                            e.currentTarget.clientWidth) <=
+                        trigger
                 ) {
                     let old_scroll_left = e.currentTarget.scrollLeft;
                     extended = true;
@@ -1413,11 +1969,10 @@ export default class Gantt {
                 dx = e.currentTarget.scrollLeft - x_on_scroll_start;
             }
 
-            // Calculate current scroll position's upper text
             this.current_date = date_utils.add(
                 this.gantt_start,
                 (e.currentTarget.scrollLeft / this.config.column_width) *
-                this.config.step,
+                    this.config.step,
                 this.config.unit,
             );
 
@@ -1430,12 +1985,11 @@ export default class Gantt {
                 (el) => el.textContent === current_upper,
             );
 
-            // Recalculate for smoother experience
             this.current_date = date_utils.add(
                 this.gantt_start,
                 ((e.currentTarget.scrollLeft + $el.clientWidth) /
                     this.config.column_width) *
-                this.config.step,
+                    this.config.step,
                 this.config.unit,
             );
             current_upper = this.config.view_mode.upper_text(
@@ -1460,7 +2014,7 @@ export default class Gantt {
                 this.get_start_end_positions();
 
             if (x_on_scroll_start > max_end + 100) {
-                this.$adjust.innerHTML = '&larr;';
+                this.$adjust.innerHTML = '←';
                 this.$adjust.classList.remove('hide');
                 this.$adjust.onclick = () => {
                     this.$container.scrollTo({
@@ -1472,7 +2026,7 @@ export default class Gantt {
                 x_on_scroll_start + e.currentTarget.offsetWidth <
                 min_start - 100
             ) {
-                this.$adjust.innerHTML = '&rarr;';
+                this.$adjust.innerHTML = '→';
                 this.$adjust.classList.remove('hide');
                 this.$adjust.onclick = () => {
                     this.$container.scrollTo({
@@ -1622,7 +2176,10 @@ export default class Gantt {
             }
 
             $bar_progress.setAttribute('width', $bar_progress.owidth + dx);
-            $.attr(bar.$handle_progress, 'cx', $bar_progress.getEndX());
+            $.attr(
+                bar.$handle_progression,
+                $.attr(bar.$handle_progress, 'cx', $bar_progress.getEndX()),
+            );
 
             $bar_progress.finaldx = dx;
         });
@@ -1754,12 +2311,6 @@ export default class Gantt {
         }
     }
 
-    /**
-     * Gets the oldest starting date from the list of tasks
-     *
-     * @returns Date
-     * @memberof Gantt
-     */
     get_oldest_starting_date() {
         if (!this.tasks.length) return new Date();
         return this.tasks
@@ -1769,21 +2320,22 @@ export default class Gantt {
             );
     }
 
-    /**
-     * Clear all elements from the parent svg element
-     *
-     * @memberof Gantt
-     */
     clear() {
         this.$svg.innerHTML = '';
         this.$header?.remove?.();
         this.$side_header?.remove?.();
         this.$current_highlight?.remove?.();
-        this.$custom_highlight?.remove?.();
         this.$current_ball_highlight?.remove?.();
-        this.$custom_ball_highlight?.remove?.();
         this.$extras?.remove?.();
         this.popup?.hide?.();
+        if (this.$animated_highlight) {
+            this.$animated_highlight.remove();
+            this.$animated_highlight = null;
+        }
+        if (this.$animated_ball_highlight) {
+            this.$animated_ball_highlight.remove();
+            this.$animated_ball_highlight = null;
+        }
     }
 }
 
