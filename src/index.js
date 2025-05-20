@@ -79,7 +79,7 @@ export default class Gantt {
         this.options = {
             ...DEFAULT_OPTIONS,
             ...options,
-            task_interval: options.task_interval || 100, // Fixed interval for task updates
+            task_interval: options.task_interval || 100,
             viewer_debounce_interval: options.viewer_debounce_interval || 200,
             event_debounce_interval: options.event_debounce_interval || 100,
         };
@@ -1001,6 +1001,10 @@ export default class Gantt {
         }
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
+            console.log(
+                'toggle_play: Starting playback, custom_marker_date:',
+                this.config.custom_marker_date,
+            );
             // Trigger initial task update synchronously
             this.task_update(performance.now());
             this.flushEventQueue();
@@ -1029,8 +1033,10 @@ export default class Gantt {
                 this.config.unit,
             );
             const left = (diff / this.config.step) * this.config.column_width;
+            console.log('toggle_play: Initial highlight position:', left);
             this.play_animated_highlight(left, this.config.custom_marker_date);
         } else {
+            console.log('toggle_play: Stopping playback');
             clearInterval(this.player_interval);
             clearInterval(this.taskInterval);
             if (this.scrollAnimationFrame) {
@@ -1063,7 +1069,7 @@ export default class Gantt {
 
     task_update(currentTime) {
         if (!this.options.player_state) {
-            console.log('task_update exited: player_state is false');
+            console.log('task_update: Exited, player_state is false');
             return;
         }
 
@@ -1073,6 +1079,7 @@ export default class Gantt {
             (this.config.player_end_date &&
                 this.config.custom_marker_date >= this.config.player_end_date)
         ) {
+            console.log('task_update: Exited, no marker or reached end date');
             return;
         }
 
@@ -1095,32 +1102,33 @@ export default class Gantt {
             (startDiff / this.config.step) * this.config.column_width;
         const moveDistance = this.config.column_width;
         const currentLeft = startLeft + moveDistance * progress;
+        console.log(
+            'task_update: currentLeft:',
+            currentLeft,
+            'progress:',
+            progress,
+        );
 
-        // Cache task boundaries and filter tasks with dbIds
-        const tasksWithBounds = this.tasks
-            .filter(
-                (task) =>
-                    this.options.phasing_config?.objects[task.id]?.length > 0,
-            )
-            .map((task) => {
-                const startX =
-                    (date_utils.diff(
-                        task._start,
-                        this.gantt_start,
-                        this.config.unit,
-                    ) /
-                        this.config.step) *
-                    this.config.column_width;
-                const endX =
-                    (date_utils.diff(
-                        task._end,
-                        this.gantt_start,
-                        this.config.unit,
-                    ) /
-                        this.config.step) *
-                    this.config.column_width;
-                return { task, startX, endX };
-            });
+        // Process all tasks (remove filter to debug)
+        const tasksWithBounds = this.tasks.map((task) => {
+            const startX =
+                (date_utils.diff(
+                    task._start,
+                    this.gantt_start,
+                    this.config.unit,
+                ) /
+                    this.config.step) *
+                this.config.column_width;
+            const endX =
+                (date_utils.diff(
+                    task._end,
+                    this.gantt_start,
+                    this.config.unit,
+                ) /
+                    this.config.step) *
+                this.config.column_width;
+            return { task, startX, endX };
+        });
 
         // Check tasks overlapping the current highlight position
         const new_overlapping = new Set(
@@ -1129,15 +1137,24 @@ export default class Gantt {
                     ({ startX, endX }) =>
                         startX <= currentLeft + 0.001 &&
                         currentLeft < endX - 0.001,
-                ) // Precision adjustment
+                )
                 .map(({ task }) => task.id),
         );
+        console.log('task_update: new_overlapping tasks:', [
+            ...new_overlapping,
+        ]);
 
         const entered_tasks = [...new_overlapping].filter(
             (id) => !this.overlapping_tasks.has(id),
         );
         const exited_tasks = [...this.overlapping_tasks].filter(
             (id) => !new_overlapping.has(id),
+        );
+        console.log(
+            'task_update: entered_tasks:',
+            entered_tasks,
+            'exited_tasks:',
+            exited_tasks,
         );
 
         // Queue events
@@ -1152,16 +1169,12 @@ export default class Gantt {
         });
 
         this.overlapping_tasks = new_overlapping;
+        console.log('task_update: eventQueue size:', this.eventQueue.size);
 
-        // Debounce event triggers
+        // Force flush events for debugging
         const now = performance.now();
-        if (
-            now - this.lastEventUpdate >=
-            this.options.event_debounce_interval
-        ) {
-            this.flushEventQueue();
-            this.lastEventUpdate = now;
-        }
+        this.flushEventQueue();
+        this.lastEventUpdate = now;
 
         // Debounce viewer updates
         if (
@@ -1175,14 +1188,24 @@ export default class Gantt {
 
     debounceViewerUpdates() {
         const updates = Array.from(this.viewerUpdateQueue.entries());
-        if (
-            !updates.length ||
-            !this.options.dataVizExtn ||
-            !this.options.viewer
-        )
+        console.log(
+            'debounceViewerUpdates: Processing updates:',
+            updates.map(([id, { task, state }]) => ({
+                id,
+                state,
+                task_name: task.name,
+            })),
+        );
+        if (!updates.length) {
+            console.log('debounceViewerUpdates: No updates to process');
             return;
+        }
+        if (!this.options.dataVizExtn || !this.options.viewer) {
+            console.log('debounceViewerUpdates: Missing dataVizExtn or viewer');
+            return;
+        }
 
-        // Cache shading nodes if not already cached
+        // Cache shading nodes
         if (
             !this.shadingNodeCache.size &&
             this.options.dataVizExtn?.surfaceShading?.[1]?.shadingData
@@ -1196,6 +1219,10 @@ export default class Gantt {
                     this.shadingNodeCache.set(task.id, node);
                 }
             });
+            console.log(
+                'debounceViewerUpdates: Cached shading nodes:',
+                this.shadingNodeCache.size,
+            );
         }
 
         // Group tasks by state
@@ -1205,8 +1232,14 @@ export default class Gantt {
         const exitTasks = updates
             .filter(([_, { state }]) => state === 'exit')
             .map(([_, { task }]) => task);
+        console.log(
+            'debounceViewerUpdates: enterTasks:',
+            enterTasks.map((t) => t.name),
+            'exitTasks:',
+            exitTasks.map((t) => t.name),
+        );
 
-        // Batch visibility updates for enter tasks
+        // Batch visibility updates
         if (enterTasks.length && this.options.formattingOptions?.clear?.value) {
             const allDbIds = [];
             enterTasks.forEach((task) => {
@@ -1216,7 +1249,7 @@ export default class Gantt {
                 }
             });
             if (allDbIds.length) {
-                // Check if dbIds are already visible to skip redundant calls
+                console.log('debounceViewerUpdates: Showing dbIds:', allDbIds);
                 const viewer = this.options.viewer;
                 const visibleDbIds = new Set(
                     viewer.impl.getVisibleDbIds?.() ||
@@ -1228,6 +1261,10 @@ export default class Gantt {
                 );
                 if (dbIdsToShow.length) {
                     viewer.show(dbIdsToShow);
+                } else {
+                    console.log(
+                        'debounceViewerUpdates: All dbIds already visible',
+                    );
                 }
             }
         }
@@ -1241,7 +1278,10 @@ export default class Gantt {
             exitTasks.forEach((task) => {
                 shadingUpdates[task.name] = (a, b) => 0.3;
             });
-            // Apply all shading updates in a single call
+            console.log(
+                'debounceViewerUpdates: Applying shading updates:',
+                Object.keys(shadingUpdates),
+            );
             Object.entries(shadingUpdates).forEach(
                 ([taskName, shadingFunc]) => {
                     this.options.dataVizExtn.renderSurfaceShading(
@@ -1254,13 +1294,26 @@ export default class Gantt {
         }
 
         this.viewerUpdateQueue.clear();
+        console.log('debounceViewerUpdates: Cleared viewerUpdateQueue');
     }
 
     flushEventQueue() {
         const events = Array.from(this.eventQueue.entries());
+        console.log(
+            'flushEventQueue: Processing events:',
+            events.map(([id, { task, state }]) => ({
+                id,
+                state,
+                task_name: task.name,
+            })),
+        );
         if (!events.length) return;
 
         events.forEach(([id, { task, state }]) => {
+            console.log(
+                `flushEventQueue: Triggering ${state} for task:`,
+                task.name,
+            );
             if (state === 'enter') {
                 this.trigger_event('bar_enter', [task]);
             } else {
@@ -1270,6 +1323,7 @@ export default class Gantt {
         });
 
         this.eventQueue.clear();
+        console.log('flushEventQueue: Cleared eventQueue');
     }
 
     flushViewerUpdates() {
