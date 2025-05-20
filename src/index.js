@@ -81,7 +81,7 @@ export default class Gantt {
             ...options,
             task_interval: options.task_interval || 30,
             viewer_debounce_interval: options.viewer_debounce_interval || 100,
-            event_debounce_interval: options.event_debounce_interval || 20, // Even faster events
+            event_debounce_interval: options.event_debounce_interval || 20,
         };
         const CSS_VARIABLES = {
             'grid-height': 'container_height',
@@ -108,7 +108,6 @@ export default class Gantt {
             this.options.player_state = false;
         }
 
-        // Set view mode and calculate initial offset
         const view_mode = this.options.view_mode || 'Day';
         let offsetUnit,
             offsetAmount = -2;
@@ -144,7 +143,6 @@ export default class Gantt {
             const baseDate = this.options.custom_marker_init_date
                 ? new Date(this.options.custom_marker_init_date)
                 : new Date(this.tasks[0]?._start || Date.now());
-            // Custom offset logic to ensure correct date arithmetic
             let newDate = new Date(baseDate);
             if (offsetUnit === 'week') {
                 newDate.setDate(baseDate.getDate() + offsetAmount * 7);
@@ -193,81 +191,63 @@ export default class Gantt {
     }
 
     setup_tasks(tasks) {
-        this.tasks = tasks
-            .map((task, i) => {
-                if (!task.start) {
-                    console.error(
-                        `task "${task.id}" doesn't have a start date`,
-                    );
-                    return false;
-                }
+        // Validate and prepare tasks
+        this.tasks = tasks.map((task, i) => {
+            task._start = date_utils.parse(task.start);
+            task._end = date_utils.parse(task.end);
 
-                task._start = date_utils.parse(task.start);
-                if (task.end === undefined && task.duration !== undefined) {
-                    task.end = task._start;
-                    let durations = task.duration.split(' ');
+            if (!task.start && !task.end) {
+                const today = new Date();
+                task._start = today;
+                task._end = date_utils.add(today, 1, 'day');
+            }
 
-                    durations.forEach((tmpDuration) => {
-                        let { duration, scale } =
-                            date_utils.parse_duration(tmpDuration);
-                        task.end = date_utils.add(task.end, duration, scale);
-                    });
-                }
-                if (!task.end) {
-                    console.error(`task "${task.id}" doesn't have an end date`);
-                    return false;
-                }
-                task._end = date_utils.parse(task.end);
+            if (!task.end && task.start) {
+                task._end = date_utils.add(
+                    task._start,
+                    task.duration || 1,
+                    'day',
+                );
+            }
 
-                let diff = date_utils.diff(task._end, task._start, 'year');
-                if (diff < 0) {
-                    console.error(
-                        `start of task can't be after end of task: in task "${task.id}"`,
-                    );
-                    return false;
-                }
+            task._index = i;
 
-                if (date_utils.diff(task._end, task._start, 'year') > 10) {
-                    console.error(
-                        `the duration of task "${task.id}" is too long (above ten years)`,
-                    );
-                    return false;
-                }
+            if (!task.id) {
+                task.id = generate_id(task);
+            }
 
-                task._index = i;
+            if (!task.name) {
+                task.name = task.id;
+            }
 
-                const task_end_values = date_utils.get_date_values(task._end);
-                if (task_end_values.slice(3).every((d) => d === 0)) {
-                    task._end = date_utils.add(task._end, 24, 'hour');
-                }
+            task.progress = parseFloat(task.progress) || 0;
 
-                if (
-                    typeof task.dependencies === 'string' ||
-                    !task.dependencies
-                ) {
-                    let deps = [];
-                    if (task.dependencies) {
-                        deps = task.dependencies
-                            .split(',')
-                            .map((d) => d.trim().replaceAll(' ', '_'))
-                            .filter((d) => d);
-                    }
-                    task.dependencies = deps;
-                }
+            // Validate dates
+            if (isNaN(task._start.getTime()) || isNaN(task._end.getTime())) {
+                console.warn(
+                    `Invalid task dates: id=${task.id}, start=${task.start}, end=${task.end}`,
+                );
+                task._start = new Date();
+                task._end = date_utils.add(task._start, 1, 'day');
+            }
 
-                if (!task.id) {
-                    task.id = generate_id(task);
-                } else if (typeof task.id === 'string') {
-                    task.id = task.id.replaceAll(' ', '_');
-                } else {
-                    task.id = `${task.id}`;
-                }
+            console.log(
+                `setup_tasks: Task id=${task.id}, name=${task.name}, start=${task._start}, end=${task._end}`,
+            );
+            return task;
+        });
 
-                return task;
-            })
-            .filter((t) => t);
-        this.setup_dependencies();
-        this.scroll_to_latest_task(); // Scroll to the latest task after setup
+        // Log phasing_config.objects
+        if (this.options.phasing_config?.objects) {
+            console.log(
+                'setup_tasks: phasing_config.objects:',
+                this.options.phasing_config.objects,
+            );
+        } else {
+            console.warn(
+                'setup_tasks: phasing_config.objects is empty or undefined',
+            );
+        }
     }
 
     setup_dependencies() {
@@ -348,7 +328,6 @@ export default class Gantt {
             }
         }
 
-        // Ensure gantt_start includes run-up
         if (
             this.config.custom_marker_date &&
             this.config.custom_marker_date < this.gantt_start
@@ -783,13 +762,11 @@ export default class Gantt {
     }
 
     highlight_current() {
-        // Remove existing highlight
         const highlight = document.querySelector('.grid-row .today-highlight');
         if (highlight) {
             highlight.classList.remove('today-highlight');
         }
 
-        // Format date based on view mode
         const date = this.config.custom_marker_date || new Date();
         let dateStr;
         switch (this.options.view_mode.toLowerCase()) {
@@ -800,7 +777,6 @@ export default class Gantt {
                 dateStr = date_utils.format(date, 'YYYY-MM');
                 break;
             case 'week':
-                // Use start of week
                 const weekStart = date_utils.start_of(date, 'week');
                 dateStr = date_utils.format(weekStart, 'YYYY-MM-DD');
                 break;
@@ -1119,6 +1095,16 @@ export default class Gantt {
             return;
         }
 
+        // Validate custom_marker_date
+        if (
+            this.config.custom_marker_date < this.gantt_start ||
+            this.config.custom_marker_date > this.gantt_end
+        ) {
+            console.warn(
+                `task_update: custom_marker_date=${this.config.custom_marker_date} is outside gantt_start=${this.gantt_start} to gantt_end=${this.gantt_end}`,
+            );
+        }
+
         const diff = date_utils.diff(
             this.config.custom_marker_date,
             this.gantt_start,
@@ -1133,12 +1119,19 @@ export default class Gantt {
             this.config.custom_marker_date,
         );
 
+        // Fallback to all tasks if phasing_config.objects is empty
         const tasksWithBounds = this.tasks
-            .filter(
-                (task) =>
-                    !this.options.phasing_config?.objects ||
-                    this.options.phasing_config.objects[task.id]?.length > 0,
-            )
+            .filter((task) => {
+                const hasDbIds =
+                    this.options.phasing_config?.objects?.[task.id]?.length > 0;
+                if (!this.options.phasing_config?.objects) {
+                    console.log(
+                        `task_update: No phasing_config.objects, including task id=${task.id}`,
+                    );
+                    return true;
+                }
+                return hasDbIds;
+            })
             .map((task) => {
                 const startX =
                     (date_utils.diff(
@@ -1156,15 +1149,17 @@ export default class Gantt {
                     ) /
                         this.config.step) *
                     this.config.column_width;
+                console.log(
+                    `task_update: Task id=${task.id}, startX=${startX}, endX=${endX}, start=${task._start}, end=${task._end}`,
+                );
                 return { task, startX, endX };
             });
 
-        // Add boundary check for precise event triggers
         const new_overlapping = new Set(
             tasksWithBounds
                 .filter(
                     ({ startX, endX }) =>
-                        startX <= currentLeft + 0.001 && currentLeft <= endX,
+                        startX <= currentLeft && currentLeft < endX,
                 )
                 .map(({ task }) => task.id),
         );
@@ -1198,22 +1193,9 @@ export default class Gantt {
         this.overlapping_tasks = new_overlapping;
         console.log('task_update: eventQueue size:', this.eventQueue.size);
 
-        const now = performance.now();
-        if (
-            now - this.lastEventUpdate >=
-            this.options.event_debounce_interval
-        ) {
-            this.flushEventQueue();
-            this.lastEventUpdate = now;
-        }
-
-        if (
-            now - this.lastViewerUpdate >=
-            this.options.viewer_debounce_interval
-        ) {
-            this.flushViewerUpdates();
-            this.lastViewerUpdate = now;
-        }
+        // Force flush to catch events
+        this.flushEventQueue();
+        this.lastEventUpdate = currentTime;
     }
 
     debounceViewerUpdates() {
@@ -1351,7 +1333,6 @@ export default class Gantt {
         this.eventQueue.clear();
         console.log('flushEventQueue: Cleared eventQueue');
 
-        // Immediate viewer update for critical events
         this.flushViewerUpdates();
     }
 
