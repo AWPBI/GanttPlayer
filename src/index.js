@@ -184,14 +184,125 @@ export default class Gantt {
         }
     }
 
-    update_options(options) {
-        this.setup_options({ ...this.original_options, ...options });
-        this.change_view_mode(undefined, true);
-        clearInterval(this.player_interval);
+    setup_options(options) {
+        this.original_options = options;
+        this.options = {
+            ...DEFAULT_OPTIONS,
+            ...options,
+            task_interval: options.task_interval || 30,
+            viewer_debounce_interval: options.viewer_debounce_interval || 100,
+            event_debounce_interval: options.event_debounce_interval || 20,
+        };
+        const CSS_VARIABLES = {
+            'grid-height': 'container_height',
+            'bar-height': 'bar_height',
+            'lower-header-height': 'lower_header_height',
+            'upper-header-height': 'upper_header_height',
+        };
+        for (let name in CSS_VARIABLES) {
+            let setting = this.options[CSS_VARIABLES[name]];
+            if (setting !== 'auto')
+                this.$container.style.setProperty(
+                    '--gv-' + name,
+                    setting + 'px',
+                );
+        }
+
+        this.config = {
+            ignored_dates: [],
+            ignored_positions: [],
+            extend_by_units: 10,
+        };
+
+        if (this.options.player_button) {
+            this.options.player_state = false;
+        }
+
+        const view_mode = this.options.view_mode || 'Day';
+        let offsetUnit,
+            offsetAmount = -2;
+        switch (view_mode.toLowerCase()) {
+            case 'hour':
+                offsetUnit = 'hour';
+                break;
+            case 'quarter_day':
+                offsetUnit = 'hour';
+                offsetAmount = -2 * 6;
+                break;
+            case 'half_day':
+                offsetUnit = 'hour';
+                offsetAmount = -2 * 12;
+                break;
+            case 'day':
+                offsetUnit = 'day';
+                break;
+            case 'week':
+                offsetUnit = 'week';
+                break;
+            case 'month':
+                offsetUnit = 'month';
+                break;
+            case 'year':
+                offsetUnit = 'year';
+                break;
+            default:
+                offsetUnit = 'day';
+        }
+
+        if (this.options.custom_marker) {
+            const baseDate = this.options.custom_marker_init_date
+                ? new Date(this.options.custom_marker_init_date)
+                : new Date(this.tasks[0]?._start || Date.now());
+            let newDate = new Date(baseDate);
+            if (offsetUnit === 'week') {
+                newDate.setDate(baseDate.getDate() + offsetAmount * 7);
+            } else if (offsetUnit === 'month') {
+                newDate.setMonth(baseDate.getMonth() + offsetAmount);
+            } else if (offsetUnit === 'year') {
+                newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
+            } else {
+                newDate = date_utils.add(baseDate, offsetAmount, offsetUnit);
+            }
+            this.config.custom_marker_date = newDate;
+            console.log(
+                `setup_options: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
+            );
+        }
+
+        if (this.options.player_end_date) {
+            this.config.player_end_date = new Date(
+                this.options.player_end_date,
+            );
+        }
+        if (typeof this.options.ignore !== 'function') {
+            if (typeof this.options.ignore === 'string')
+                this.options.ignore = [this.options.ignore];
+            for (let option of this.options.ignore) {
+                if (typeof option === 'function') {
+                    this.config.ignored_function = option;
+                    continue;
+                }
+                if (typeof option === 'string') {
+                    if (option === 'weekend')
+                        this.config.ignored_function = (d) =>
+                            d.getDay() == 6 || d.getDay() == 0;
+                    else this.config.ignored_dates.push(new Date(option + ' '));
+                }
+            }
+        } else {
+            this.config.ignored_function = this.options.ignore;
+        }
     }
 
     setup_tasks(tasks) {
-        // Validate and prepare tasks
+        if (!tasks || !Array.isArray(tasks)) {
+            console.error(
+                'setup_tasks: Invalid tasks input, expected array:',
+                tasks,
+            );
+            this.tasks = [];
+            return;
+        }
         this.tasks = tasks.map((task, i) => {
             task._start = date_utils.parse(task.start);
             task._end = date_utils.parse(task.end);
@@ -222,7 +333,6 @@ export default class Gantt {
 
             task.progress = parseFloat(task.progress) || 0;
 
-            // Validate dates
             if (isNaN(task._start.getTime()) || isNaN(task._end.getTime())) {
                 console.warn(
                     `Invalid task dates: id=${task.id}, start=${task.start}, end=${task.end}`,
@@ -237,7 +347,6 @@ export default class Gantt {
             return task;
         });
 
-        // Log phasing_config.objects
         if (this.options.phasing_config?.objects) {
             console.log(
                 'setup_tasks: phasing_config.objects:',
@@ -1095,7 +1204,6 @@ export default class Gantt {
             return;
         }
 
-        // Validate custom_marker_date
         if (
             this.config.custom_marker_date < this.gantt_start ||
             this.config.custom_marker_date > this.gantt_end
@@ -1119,17 +1227,22 @@ export default class Gantt {
             this.config.custom_marker_date,
         );
 
-        // Fallback to all tasks if phasing_config.objects is empty
         const tasksWithBounds = this.tasks
             .filter((task) => {
                 const hasDbIds =
                     this.options.phasing_config?.objects?.[task.id]?.length > 0;
-                if (!this.options.phasing_config?.objects) {
+                if (
+                    !this.options.phasing_config?.objects ||
+                    !Object.keys(this.options.phasing_config.objects).length
+                ) {
                     console.log(
-                        `task_update: No phasing_config.objects, including task id=${task.id}`,
+                        `task_update: No or empty phasing_config.objects, including task id=${task.id}`,
                     );
                     return true;
                 }
+                console.log(
+                    `task_update: Task id=${task.id}, hasDbIds=${hasDbIds}`,
+                );
                 return hasDbIds;
             })
             .map((task) => {
@@ -1193,9 +1306,14 @@ export default class Gantt {
         this.overlapping_tasks = new_overlapping;
         console.log('task_update: eventQueue size:', this.eventQueue.size);
 
-        // Force flush to catch events
-        this.flushEventQueue();
-        this.lastEventUpdate = currentTime;
+        const now = performance.now();
+        if (
+            now - this.lastEventUpdate >=
+            this.options.event_debounce_interval
+        ) {
+            this.flushEventQueue();
+            this.lastEventUpdate = now;
+        }
     }
 
     debounceViewerUpdates() {
@@ -1550,23 +1668,38 @@ export default class Gantt {
     }
 
     make_arrows() {
+        if (!this.tasks || !Array.isArray(this.tasks)) {
+            console.warn('make_arrows: No tasks available to process arrows');
+            this.arrows = [];
+            return;
+        }
+
         this.arrows = [];
-        for (let task of this.tasks) {
-            let arrows = [];
-            arrows = task.dependencies
-                .map((task_id) => {
-                    const dependency = this.get_task(task_id);
+        this.tasks.forEach((task) => {
+            if (task.dependencies && Array.isArray(task.dependencies)) {
+                task.dependencies.forEach((dep_id) => {
+                    const dependency = this.get_task(dep_id);
                     if (!dependency) return;
+
                     const arrow = new Arrow(
                         this,
-                        this.bars[dependency._index],
-                        this.bars[task._index],
+                        dependency._end,
+                        task._start,
+                        dependency._index,
+                        task._index,
                     );
-                    this.layers.arrow.appendChild(arrow.element);
-                    return arrow;
-                })
-                .filter(Boolean);
-            this.arrows = this.arrows.concat(arrows);
+                    this.arrows.push(arrow);
+                    console.log(
+                        `make_arrows: Created arrow from task ${dependency.id} to ${task.id}`,
+                    );
+                });
+            }
+        });
+
+        const layer = this.$svg.querySelector('.arrows');
+        if (layer) {
+            layer.innerHTML = '';
+            this.arrows.forEach((arrow) => arrow.update());
         }
     }
 
