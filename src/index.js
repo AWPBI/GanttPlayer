@@ -79,9 +79,9 @@ export default class Gantt {
         this.options = {
             ...DEFAULT_OPTIONS,
             ...options,
-            task_interval: options.task_interval || 50, // Faster task updates
-            viewer_debounce_interval: options.viewer_debounce_interval || 100, // Faster viewer updates
-            event_debounce_interval: options.event_debounce_interval || 50, // Faster event triggers
+            task_interval: options.task_interval || 30, // Faster task updates
+            viewer_debounce_interval: options.viewer_debounce_interval || 100,
+            event_debounce_interval: options.event_debounce_interval || 10, // Faster event triggers
         };
         const CSS_VARIABLES = {
             'grid-height': 'container_height',
@@ -111,18 +111,18 @@ export default class Gantt {
         // Set view mode and calculate initial offset
         const view_mode = this.options.view_mode || 'Day';
         let offsetUnit,
-            offsetAmount = -2; // 2 units in the past
+            offsetAmount = -2;
         switch (view_mode.toLowerCase()) {
             case 'hour':
                 offsetUnit = 'hour';
                 break;
             case 'quarter_day':
                 offsetUnit = 'hour';
-                offsetAmount = -2 * 6; // 2 quarter-days = 12 hours
+                offsetAmount = -2 * 6; // 12 hours
                 break;
             case 'half_day':
                 offsetUnit = 'hour';
-                offsetAmount = -2 * 12; // 2 half-days = 24 hours
+                offsetAmount = -2 * 12; // 24 hours
                 break;
             case 'day':
                 offsetUnit = 'day';
@@ -140,7 +140,6 @@ export default class Gantt {
                 offsetUnit = 'day';
         }
 
-        // Adjust custom_marker_init_date
         if (this.options.custom_marker) {
             const baseDate = this.options.custom_marker_init_date
                 ? new Date(this.options.custom_marker_init_date)
@@ -151,7 +150,7 @@ export default class Gantt {
                 offsetUnit,
             );
             console.log(
-                `setup_options: Set custom_marker_date to ${this.config.custom_marker_date} (${offsetAmount} ${offsetUnit}s)`,
+                `setup_options: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
             );
         }
 
@@ -330,63 +329,52 @@ export default class Gantt {
         this.setup_date_values();
     }
 
-    setup_gantt_dates(refresh) {
-        let gantt_start, gantt_end;
-        if (!this.tasks.length) {
-            gantt_start = new Date();
-            gantt_end = new Date();
-        }
+    setup_gantt_dates() {
+        this.gantt_start = this.gantt_end = null;
 
         for (let task of this.tasks) {
-            if (!gantt_start || task._start < gantt_start) {
-                gantt_start = task._start;
+            if (!this.gantt_start || task._start < this.gantt_start) {
+                this.gantt_start = task._start;
             }
-            if (!gantt_end || task._end > gantt_end) {
-                gantt_end = task._end;
-            }
-        }
-
-        gantt_start = date_utils.start_of(gantt_start, this.config.unit);
-        gantt_end = date_utils.start_of(gantt_end, this.config.unit);
-
-        if (!refresh) {
-            if (!this.options.infinite_padding) {
-                if (typeof this.config.view_mode.padding === 'string')
-                    this.config.view_mode.padding = [
-                        this.config.view_mode.padding,
-                        this.config.view_mode.padding,
-                    ];
-
-                let [padding_start, padding_end] =
-                    this.config.view_mode.padding.map(
-                        date_utils.parse_duration,
-                    );
-                this.gantt_start = date_utils.add(
-                    gantt_start,
-                    -padding_start.duration,
-                    padding_start.scale,
-                );
-                this.gantt_end = date_utils.add(
-                    gantt_end,
-                    padding_end.duration,
-                    padding_end.scale,
-                );
-            } else {
-                this.gantt_start = date_utils.add(
-                    gantt_start,
-                    -this.config.extend_by_units * 3,
-                    this.config.unit,
-                );
-                this.gantt_end = date_utils.add(
-                    gantt_end,
-                    this.config.extend_by_units * 3,
-                    this.config.unit,
-                );
+            if (!this.gantt_end || task._end > this.gantt_end) {
+                this.gantt_end = task._end;
             }
         }
-        this.config.date_format =
-            this.config.view_mode.date_format || this.options.date_format;
-        this.gantt_start.setHours(0, 0, 0, 0);
+
+        // Extend gantt_start to include run-up
+        if (
+            this.config.custom_marker_date &&
+            this.config.custom_marker_date < this.gantt_start
+        ) {
+            this.gantt_start = date_utils.start_of(
+                this.config.custom_marker_date,
+                this.config.unit,
+            );
+            console.log(
+                `setup_gantt_dates: Adjusted gantt_start to ${this.gantt_start} to include run-up`,
+            );
+        }
+
+        this.gantt_start = date_utils.start_of(
+            this.gantt_start,
+            this.config.unit,
+        );
+        this.gantt_end = date_utils.start_of(this.gantt_end, this.config.unit);
+
+        this.gantt_start = date_utils.add(
+            this.gantt_start,
+            -this.config.extend_by_units,
+            this.config.unit,
+        );
+        this.gantt_end = date_utils.add(
+            this.gantt_end,
+            this.config.extend_by_units,
+            this.config.unit,
+        );
+
+        console.log(
+            `setup_gantt_dates: gantt_start=${this.gantt_start}, gantt_end=${this.gantt_end}`,
+        );
     }
 
     setup_date_values() {
@@ -1048,7 +1036,6 @@ export default class Gantt {
                 'toggle_play: Starting playback, custom_marker_date:',
                 this.config.custom_marker_date,
             );
-            // Trigger initial task update synchronously
             this.task_update(performance.now());
             this.flushEventQueue();
             this.flushViewerUpdates();
@@ -1069,7 +1056,6 @@ export default class Gantt {
                 this.$player_button.textContent = 'Pause';
             }
 
-            // Update animated highlight to start animation
             const diff = date_utils.diff(
                 this.config.custom_marker_date,
                 this.gantt_start,
@@ -1099,7 +1085,6 @@ export default class Gantt {
                 this.$player_button.textContent = 'Play';
             }
 
-            // Pause animation
             if (this.$animated_highlight) {
                 this.$animated_highlight.style.animationPlayState = 'paused';
             }
@@ -1116,7 +1101,6 @@ export default class Gantt {
             return;
         }
 
-        // Exit if no custom marker or beyond end date
         if (
             !this.config.custom_marker_date ||
             (this.config.player_end_date &&
@@ -1126,54 +1110,48 @@ export default class Gantt {
             return;
         }
 
-        // Calculate animation progress
-        const animationDuration = (this.options.player_interval || 1000) / 1000;
-        const elapsed = (currentTime - (this.lastAnimationStart || 0)) / 1000;
-        const progress = Math.min(elapsed / animationDuration, 1);
-
-        // Calculate current highlight position
-        const startDiff = date_utils.diff(
-            date_utils.add(
-                this.config.custom_marker_date,
-                -this.config.step,
-                this.config.unit,
-            ),
+        // Use custom_marker_date directly for overlap check
+        const diff = date_utils.diff(
+            this.config.custom_marker_date,
             this.gantt_start,
             this.config.unit,
         );
-        const startLeft =
-            (startDiff / this.config.step) * this.config.column_width;
-        const moveDistance = this.config.column_width;
-        const currentLeft = startLeft + moveDistance * progress;
+        const currentLeft =
+            (diff / this.config.step) * this.config.column_width;
         console.log(
             'task_update: currentLeft:',
             currentLeft,
-            'progress:',
-            progress,
+            'custom_marker_date:',
+            this.config.custom_marker_date,
         );
 
-        // Process all tasks
-        const tasksWithBounds = this.tasks.map((task) => {
-            const startX =
-                (date_utils.diff(
-                    task._start,
-                    this.gantt_start,
-                    this.config.unit,
-                ) /
-                    this.config.step) *
-                this.config.column_width;
-            const endX =
-                (date_utils.diff(
-                    task._end,
-                    this.gantt_start,
-                    this.config.unit,
-                ) /
-                    this.config.step) *
-                this.config.column_width;
-            return { task, startX, endX };
-        });
+        // Filter tasks with dbIds if phasing_config exists
+        const tasksWithBounds = this.tasks
+            .filter(
+                (task) =>
+                    !this.options.phasing_config?.objects ||
+                    this.options.phasing_config.objects[task.id]?.length > 0,
+            )
+            .map((task) => {
+                const startX =
+                    (date_utils.diff(
+                        task._start,
+                        this.gantt_start,
+                        this.config.unit,
+                    ) /
+                        this.config.step) *
+                    this.config.column_width;
+                const endX =
+                    (date_utils.diff(
+                        task._end,
+                        this.gantt_start,
+                        this.config.unit,
+                    ) /
+                        this.config.step) *
+                    this.config.column_width;
+                return { task, startX, endX };
+            });
 
-        // Check tasks overlapping the current highlight position
         const new_overlapping = new Set(
             tasksWithBounds
                 .filter(
@@ -1199,7 +1177,6 @@ export default class Gantt {
             exited_tasks,
         );
 
-        // Queue events
         entered_tasks.forEach((id) => {
             const task = this.get_task(id);
             this.eventQueue.set(id, { task, state: 'enter' });
@@ -1213,7 +1190,6 @@ export default class Gantt {
         this.overlapping_tasks = new_overlapping;
         console.log('task_update: eventQueue size:', this.eventQueue.size);
 
-        // Debounce event triggers
         const now = performance.now();
         if (
             now - this.lastEventUpdate >=
@@ -1223,7 +1199,6 @@ export default class Gantt {
             this.lastEventUpdate = now;
         }
 
-        // Debounce viewer updates
         if (
             now - this.lastViewerUpdate >=
             this.options.viewer_debounce_interval
@@ -1252,7 +1227,6 @@ export default class Gantt {
             return;
         }
 
-        // Cache shading nodes
         if (
             !this.shadingNodeCache.size &&
             this.options.dataVizExtn?.surfaceShading?.[1]?.shadingData
@@ -1272,7 +1246,6 @@ export default class Gantt {
             );
         }
 
-        // Group tasks by state
         const enterTasks = updates
             .filter(([_, { state }]) => state === 'enter')
             .map(([_, { task }]) => task);
@@ -1286,7 +1259,6 @@ export default class Gantt {
             exitTasks.map((t) => t.name),
         );
 
-        // Batch visibility updates
         if (enterTasks.length && this.options.formattingOptions?.clear?.value) {
             const allDbIds = [];
             enterTasks.forEach((task) => {
@@ -1316,7 +1288,6 @@ export default class Gantt {
             }
         }
 
-        // Batch shading updates
         if (enterTasks.length || exitTasks.length) {
             const shadingUpdates = {};
             enterTasks.forEach((task) => {
@@ -1371,6 +1342,9 @@ export default class Gantt {
 
         this.eventQueue.clear();
         console.log('flushEventQueue: Cleared eventQueue');
+
+        // Immediate viewer update for critical events
+        this.flushViewerUpdates();
     }
 
     flushViewerUpdates() {
@@ -1379,7 +1353,6 @@ export default class Gantt {
     }
 
     reset_play() {
-        // Recompute offset based on view mode
         const view_mode = this.options.view_mode || 'Day';
         let offsetUnit,
             offsetAmount = -2;
@@ -1419,7 +1392,7 @@ export default class Gantt {
             offsetUnit,
         );
         console.log(
-            `reset_play: Reset custom_marker_date to ${this.config.custom_marker_date} (${offsetAmount} ${offsetUnit}s)`,
+            `reset_play: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
         );
 
         this.options.player_state = false;
@@ -1446,7 +1419,6 @@ export default class Gantt {
             this.$player_button.textContent = 'Play';
         }
 
-        // Preserve animated highlights and update their position
         this.render();
         const diff = date_utils.diff(
             this.config.custom_marker_date,
@@ -1780,31 +1752,27 @@ export default class Gantt {
 
     player_update() {
         if (!this.options.player_state) {
-            console.log('player_update exited: player_state is false');
+            console.log('player_update: Exited, player_state is false');
             return;
         }
 
-        // Check if we've reached or passed the end date
         if (
             this.config.player_end_date &&
             this.config.custom_marker_date >= this.config.player_end_date
         ) {
-            console.log('player_update: reached player_end_date, stopping');
+            console.log('player_update: Reached player_end_date, stopping');
             this.handle_animation_end();
             return;
         }
 
-        // Increment custom marker date
         this.config.custom_marker_date = date_utils.add(
             this.config.custom_marker_date,
             this.config.step,
             this.config.unit,
         );
 
-        // Trigger task update synchronously to catch events at step boundaries
         this.task_update(performance.now());
 
-        // Calculate new position
         const diff_in_units = date_utils.diff(
             this.config.custom_marker_date,
             this.gantt_start,
@@ -1813,9 +1781,7 @@ export default class Gantt {
         const newLeft =
             (diff_in_units / this.config.step) * this.config.column_width;
 
-        // Update animated highlight position
         if (this.$animated_highlight && this.$animated_ball_highlight) {
-            // Reset animation to start from new position
             this.$animated_highlight.style.left = `${newLeft}px`;
             this.$animated_ball_highlight.style.left = `${newLeft - 2}px`;
 
@@ -1841,7 +1807,6 @@ export default class Gantt {
             );
         }
 
-        // Start smooth scrolling animation
         this.start_scroll_animation(newLeft);
     }
 
@@ -2034,7 +1999,6 @@ export default class Gantt {
             this.shadingNodeCache.clear();
 
             if (this.options.player_loop) {
-                // Recompute offset for loop
                 const view_mode = this.options.view_mode || 'Day';
                 let offsetUnit,
                     offsetAmount = -2;
@@ -2074,7 +2038,7 @@ export default class Gantt {
                     offsetUnit,
                 );
                 console.log(
-                    `handle_animation_end: Loop reset custom_marker_date to ${this.config.custom_marker_date} (${offsetAmount} ${offsetUnit}s)`,
+                    `handle_animation_end: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
                 );
 
                 this.overlapping_tasks.clear();
@@ -2095,7 +2059,6 @@ export default class Gantt {
                     }
                 }
 
-                // Pause animated highlight
                 if (this.$animated_highlight) {
                     this.$animated_highlight.style.animation = 'none';
                     this.$animated_highlight.style.animationPlayState =
