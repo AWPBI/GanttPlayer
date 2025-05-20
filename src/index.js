@@ -79,9 +79,9 @@ export default class Gantt {
         this.options = {
             ...DEFAULT_OPTIONS,
             ...options,
-            task_interval: options.task_interval || 30, // Faster task updates
+            task_interval: options.task_interval || 30,
             viewer_debounce_interval: options.viewer_debounce_interval || 100,
-            event_debounce_interval: options.event_debounce_interval || 10, // Faster event triggers
+            event_debounce_interval: options.event_debounce_interval || 20, // Even faster events
         };
         const CSS_VARIABLES = {
             'grid-height': 'container_height',
@@ -118,11 +118,11 @@ export default class Gantt {
                 break;
             case 'quarter_day':
                 offsetUnit = 'hour';
-                offsetAmount = -2 * 6; // 12 hours
+                offsetAmount = -2 * 6;
                 break;
             case 'half_day':
                 offsetUnit = 'hour';
-                offsetAmount = -2 * 12; // 24 hours
+                offsetAmount = -2 * 12;
                 break;
             case 'day':
                 offsetUnit = 'day';
@@ -144,11 +144,18 @@ export default class Gantt {
             const baseDate = this.options.custom_marker_init_date
                 ? new Date(this.options.custom_marker_init_date)
                 : new Date(this.tasks[0]?._start || Date.now());
-            this.config.custom_marker_date = date_utils.add(
-                baseDate,
-                offsetAmount,
-                offsetUnit,
-            );
+            // Custom offset logic to ensure correct date arithmetic
+            let newDate = new Date(baseDate);
+            if (offsetUnit === 'week') {
+                newDate.setDate(baseDate.getDate() + offsetAmount * 7);
+            } else if (offsetUnit === 'month') {
+                newDate.setMonth(baseDate.getMonth() + offsetAmount);
+            } else if (offsetUnit === 'year') {
+                newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
+            } else {
+                newDate = date_utils.add(baseDate, offsetAmount, offsetUnit);
+            }
+            this.config.custom_marker_date = newDate;
             console.log(
                 `setup_options: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
             );
@@ -341,7 +348,7 @@ export default class Gantt {
             }
         }
 
-        // Extend gantt_start to include run-up
+        // Ensure gantt_start includes run-up
         if (
             this.config.custom_marker_date &&
             this.config.custom_marker_date < this.gantt_start
@@ -776,39 +783,41 @@ export default class Gantt {
     }
 
     highlight_current() {
-        const res = this.get_closest_date();
-        if (!res) return null;
+        // Remove existing highlight
+        const highlight = document.querySelector('.grid-row .today-highlight');
+        if (highlight) {
+            highlight.classList.remove('today-highlight');
+        }
 
-        const [_, el] = res;
-        el.classList.add('current-date-highlight');
+        // Format date based on view mode
+        const date = this.config.custom_marker_date || new Date();
+        let dateStr;
+        switch (this.options.view_mode.toLowerCase()) {
+            case 'year':
+                dateStr = date_utils.format(date, 'YYYY');
+                break;
+            case 'month':
+                dateStr = date_utils.format(date, 'YYYY-MM');
+                break;
+            case 'week':
+                // Use start of week
+                const weekStart = date_utils.start_of(date, 'week');
+                dateStr = date_utils.format(weekStart, 'YYYY-MM-DD');
+                break;
+            default:
+                dateStr = date_utils.format(date, 'YYYY-MM-DD');
+        }
 
-        const dateObj = new Date();
-
-        const diff_in_units = date_utils.diff(
-            dateObj,
-            this.gantt_start,
-            this.config.unit,
+        const cell = document.querySelector(
+            `.grid-row [data-date="${dateStr}"]`,
         );
-
-        const left =
-            (diff_in_units / this.config.step) * this.config.column_width;
-
-        this.$current_highlight = this.create_el({
-            top: this.config.header_height,
-            left,
-            height: this.grid_height - this.config.header_height,
-            classes: 'current-highlight',
-            append_to: this.$container,
-        });
-        this.$current_ball_highlight = this.create_el({
-            top: this.config.header_height - 6,
-            left: left - 2.5,
-            width: 6,
-            height: 6,
-            classes: 'current-ball-highlight',
-            append_to: this.$header,
-        });
-        return { left, dateObj };
+        if (cell) {
+            cell.classList.add('today-highlight');
+        } else {
+            console.warn(
+                `highlight_current: No cell found for date=${dateStr}`,
+            );
+        }
     }
 
     highlight_custom(date) {
@@ -1110,7 +1119,6 @@ export default class Gantt {
             return;
         }
 
-        // Use custom_marker_date directly for overlap check
         const diff = date_utils.diff(
             this.config.custom_marker_date,
             this.gantt_start,
@@ -1125,7 +1133,6 @@ export default class Gantt {
             this.config.custom_marker_date,
         );
 
-        // Filter tasks with dbIds if phasing_config exists
         const tasksWithBounds = this.tasks
             .filter(
                 (task) =>
@@ -1152,11 +1159,12 @@ export default class Gantt {
                 return { task, startX, endX };
             });
 
+        // Add boundary check for precise event triggers
         const new_overlapping = new Set(
             tasksWithBounds
                 .filter(
                     ({ startX, endX }) =>
-                        startX <= currentLeft && currentLeft < endX,
+                        startX <= currentLeft + 0.001 && currentLeft <= endX,
                 )
                 .map(({ task }) => task.id),
         );
@@ -1386,11 +1394,17 @@ export default class Gantt {
         const baseDate = this.options.custom_marker_init_date
             ? new Date(this.options.custom_marker_init_date)
             : new Date(this.tasks[0]?._start || Date.now());
-        this.config.custom_marker_date = date_utils.add(
-            baseDate,
-            offsetAmount,
-            offsetUnit,
-        );
+        let newDate = new Date(baseDate);
+        if (offsetUnit === 'week') {
+            newDate.setDate(baseDate.getDate() + offsetAmount * 7);
+        } else if (offsetUnit === 'month') {
+            newDate.setMonth(baseDate.getMonth() + offsetAmount);
+        } else if (offsetUnit === 'year') {
+            newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
+        } else {
+            newDate = date_utils.add(baseDate, offsetAmount, offsetUnit);
+        }
+        this.config.custom_marker_date = newDate;
         console.log(
             `reset_play: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
         );
@@ -1412,11 +1426,13 @@ export default class Gantt {
         this.player_interval = null;
         this.taskInterval = null;
 
-        if (this.options.player_use_fa) {
-            this.$player_button.classList.remove('fa-pause');
-            this.$player_button.classList.add('fa-play');
-        } else {
-            this.$player_button.textContent = 'Play';
+        if (this.$player_button) {
+            if (this.options.player_use_fa) {
+                this.$player_button.classList.remove('fa-pause');
+                this.$player_button.classList.add('fa-play');
+            } else {
+                this.$player_button.textContent = 'Play';
+            }
         }
 
         this.render();
@@ -2032,11 +2048,21 @@ export default class Gantt {
                 const baseDate = this.options.custom_marker_init_date
                     ? new Date(this.options.custom_marker_init_date)
                     : new Date(this.tasks[0]?._start || Date.now());
-                this.config.custom_marker_date = date_utils.add(
-                    baseDate,
-                    offsetAmount,
-                    offsetUnit,
-                );
+                let newDate = new Date(baseDate);
+                if (offsetUnit === 'week') {
+                    newDate.setDate(baseDate.getDate() + offsetAmount * 7);
+                } else if (offsetUnit === 'month') {
+                    newDate.setMonth(baseDate.getMonth() + offsetAmount);
+                } else if (offsetUnit === 'year') {
+                    newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
+                } else {
+                    newDate = date_utils.add(
+                        baseDate,
+                        offsetAmount,
+                        offsetUnit,
+                    );
+                }
+                this.config.custom_marker_date = newDate;
                 console.log(
                     `handle_animation_end: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
                 );
