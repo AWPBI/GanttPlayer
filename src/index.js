@@ -19,6 +19,7 @@ export default class Gantt {
         this.change_view_mode();
         this.bind_events();
         this.scrollAnimationFrame = null; // Track animation frame
+        this.task_interval = null;
     }
 
     setup_wrapper(element) {
@@ -70,7 +71,11 @@ export default class Gantt {
 
     setup_options(options) {
         this.original_options = options;
-        this.options = { ...DEFAULT_OPTIONS, ...options };
+        this.options = {
+            ...DEFAULT_OPTIONS,
+            ...options,
+            task_interval: options.task_interval || 100,
+        }; // Add task_interval
         const CSS_VARIABLES = {
             'grid-height': 'container_height',
             'bar-height': 'bar_height',
@@ -963,6 +968,9 @@ export default class Gantt {
                     el.style.animationPlayState = 'running';
                 },
             );
+
+            // Store the animation start time for task_update
+            this.lastAnimationStart = performance.now();
         } else {
             // Ensure animation is paused
             [this.$animated_highlight, this.$animated_ball_highlight].forEach(
@@ -990,6 +998,10 @@ export default class Gantt {
                 this.player_update.bind(this),
                 this.options.player_interval || 1000,
             );
+            this.task_interval = setInterval(
+                this.task_update.bind(this),
+                this.options.task_interval || 100, // Run task updates every 100ms
+            );
             this.trigger_event('start', []);
 
             if (this.options.player_use_fa) {
@@ -1009,7 +1021,9 @@ export default class Gantt {
             this.play_animated_highlight(left, this.config.custom_marker_date);
         } else {
             clearInterval(this.player_interval);
+            clearInterval(this.task_interval);
             this.player_interval = null;
+            this.task_interval = null;
             if (this.scrollAnimationFrame) {
                 cancelAnimationFrame(this.scrollAnimationFrame);
                 this.scrollAnimationFrame = null;
@@ -1034,6 +1048,83 @@ export default class Gantt {
         }
     }
 
+    task_update() {
+        if (!this.options.player_state) {
+            console.log('task_update exited: player_state is false');
+            return;
+        }
+
+        // Exit if no custom marker or beyond end date
+        if (
+            !this.config.custom_marker_date ||
+            (this.config.player_end_date &&
+                this.config.custom_marker_date >= this.config.player_end_date)
+        ) {
+            return;
+        }
+
+        // Get the current animation progress
+        const animationDuration = (this.options.player_interval || 1000) / 1000;
+        const elapsed =
+            (performance.now() - (this.lastAnimationStart || 0)) / 1000;
+        const progress = Math.min(elapsed / animationDuration, 1);
+
+        // Interpolate the current date within the current animation step
+        const startDate = date_utils.add(
+            this.config.custom_marker_date,
+            -this.config.step,
+            this.config.unit,
+        );
+        const endDate = this.config.custom_marker_date;
+        const interpolatedDate = new Date(
+            startDate.getTime() +
+                (endDate.getTime() - startDate.getTime()) * progress,
+        );
+
+        // Check tasks at interpolated date (daily granularity for non-day modes)
+        let checkDate = new Date(startDate);
+        const stepUnit = this.view_is('day') ? this.config.unit : 'day';
+        const stepSize = this.view_is('day') ? this.config.step : 1;
+
+        while (
+            checkDate <= endDate &&
+            checkDate <= (this.config.player_end_date || endDate)
+        ) {
+            if (this.options.custom_marker) {
+                const new_overlapping = new Set(
+                    this.tasks
+                        .filter(
+                            (task) =>
+                                task._start <= checkDate &&
+                                checkDate < task._end,
+                        )
+                        .map((task) => task.id),
+                );
+
+                const entered_tasks = [...new_overlapping].filter(
+                    (id) => !this.overlapping_tasks.has(id),
+                );
+                const exited_tasks = [...this.overlapping_tasks].filter(
+                    (id) => !new_overlapping.has(id),
+                );
+
+                entered_tasks.forEach((id) => {
+                    const task = this.get_task(id);
+                    this.trigger_event('bar_enter', [task]);
+                });
+
+                exited_tasks.forEach((id) => {
+                    const task = this.get_task(id);
+                    this.trigger_event('bar_exit', [task]);
+                });
+
+                this.overlapping_tasks = new_overlapping;
+            }
+
+            checkDate = date_utils.add(checkDate, stepSize, stepUnit);
+        }
+    }
+
     reset_play() {
         this.config.custom_marker_date = new Date(
             this.options.custom_marker_init_date || this.gantt_start,
@@ -1042,7 +1133,9 @@ export default class Gantt {
         this.overlapping_tasks.clear();
         this.lastTaskY = null;
         clearInterval(this.player_interval);
+        clearInterval(this.task_interval);
         this.player_interval = null;
+        this.task_interval = null;
         if (this.scrollAnimationFrame) {
             cancelAnimationFrame(this.scrollAnimationFrame);
             this.scrollAnimationFrame = null;
@@ -1447,39 +1540,6 @@ export default class Gantt {
             );
         }
 
-        // Handle overlapping tasks
-        if (this.options.custom_marker) {
-            const current_date = this.config.custom_marker_date;
-            const new_overlapping = new Set(
-                this.tasks
-                    .filter(
-                        (task) =>
-                            task._start <= current_date &&
-                            current_date < task._end,
-                    )
-                    .map((task) => task.id),
-            );
-
-            const entered_tasks = [...new_overlapping].filter(
-                (id) => !this.overlapping_tasks.has(id),
-            );
-            const exited_tasks = [...this.overlapping_tasks].filter(
-                (id) => !new_overlapping.has(id),
-            );
-
-            entered_tasks.forEach((id) => {
-                const task = this.get_task(id);
-                this.trigger_event('bar_enter', [task]);
-            });
-
-            exited_tasks.forEach((id) => {
-                const task = this.get_task(id);
-                this.trigger_event('bar_exit', [task]);
-            });
-
-            this.overlapping_tasks = new_overlapping;
-        }
-
         // Start smooth scrolling animation
         this.start_scroll_animation(newLeft);
     }
@@ -1658,6 +1718,10 @@ export default class Gantt {
                 clearInterval(this.player_interval);
                 this.player_interval = null;
             }
+            if (this.task_interval) {
+                clearInterval(this.task_interval);
+                this.task_interval = null;
+            }
             if (this.scrollAnimationFrame) {
                 cancelAnimationFrame(this.scrollAnimationFrame);
                 this.scrollAnimationFrame = null;
@@ -1669,15 +1733,8 @@ export default class Gantt {
                 );
                 this.overlapping_tasks.clear();
                 this.lastTaskY = null;
-                // this.render();
                 this.reset_play();
                 this.toggle_play();
-                // if (this.options.player_state) {
-                //     this.player_interval = setInterval(
-                //         this.player_update.bind(this),
-                //         this.options.player_interval || 1000,
-                //     );
-                // }
             } else {
                 this.options.player_state = false;
                 this.overlapping_tasks.clear();
