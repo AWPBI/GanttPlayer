@@ -101,7 +101,7 @@ export default class Gantt {
         this.config = {
             ignored_dates: [],
             ignored_positions: [],
-            extend_by_units: 5, // Reduced from 10
+            extend_by_units: 5,
         };
 
         if (this.options.player_button) {
@@ -163,7 +163,13 @@ export default class Gantt {
             this.config.player_end_date = new Date(
                 this.options.player_end_date,
             );
+        } else {
+            this.config.player_end_date = this.gantt_end;
+            console.log(
+                `setup_options: Set player_end_date to gantt_end=${this.gantt_end}`,
+            );
         }
+
         if (typeof this.options.ignore !== 'function') {
             if (typeof this.options.ignore === 'string')
                 this.options.ignore = [this.options.ignore];
@@ -354,12 +360,16 @@ export default class Gantt {
             this.gantt_start,
             this.config.unit,
         );
+        console.log(
+            `setup_gantt_dates: Aligned gantt_start=${this.gantt_start}`,
+        );
         this.gantt_end = date_utils.start_of(this.gantt_end, this.config.unit);
+        console.log(`setup_gantt_dates: Aligned gantt_end=${this.gantt_end}`);
 
         // Apply 2-unit offset to gantt_end
         const view_mode = this.options.view_mode || 'Day';
         let offsetUnit,
-            offsetAmount = 2; // Positive for end date
+            offsetAmount = 2;
         switch (view_mode.toLowerCase()) {
             case 'hour':
                 offsetUnit = 'hour';
@@ -388,6 +398,12 @@ export default class Gantt {
                 offsetUnit = 'day';
         }
 
+        if (offsetUnit !== this.config.unit) {
+            console.warn(
+                `setup_gantt_dates: offsetUnit=${offsetUnit} differs from config.unit=${this.config.unit}`,
+            );
+        }
+
         let newEndDate = new Date(this.gantt_end);
         if (offsetUnit === 'week') {
             newEndDate.setDate(this.gantt_end.getDate() + offsetAmount * 7);
@@ -402,19 +418,18 @@ export default class Gantt {
                 offsetUnit,
             );
         }
-        this.gantt_end = newEndDate;
+        this.gantt_end = date_utils.start_of(newEndDate, this.config.unit);
         console.log(
             `setup_gantt_dates: Applied ${offsetAmount} ${offsetUnit} offset to gantt_end=${this.gantt_end}`,
         );
 
-        // Additional timeline extension (optional, reduced from 10 to 5 units)
+        // Additional timeline extension
         this.gantt_start = date_utils.add(
             this.gantt_start,
             -5,
             this.config.unit,
         );
         this.gantt_end = date_utils.add(this.gantt_end, 5, this.config.unit);
-
         console.log(
             `setup_gantt_dates: Final gantt_start=${this.gantt_start}, gantt_end=${this.gantt_end}`,
         );
@@ -1146,18 +1161,28 @@ export default class Gantt {
         if (
             !this.config.custom_marker_date ||
             (this.config.player_end_date &&
-                this.config.custom_marker_date >= this.config.player_end_date)
+                this.config.custom_marker_date >=
+                    this.config.player_end_date) ||
+            this.config.custom_marker_date >= this.gantt_end
         ) {
-            console.log('task_update: Exited, no marker or reached end date');
+            console.log(
+                'task_update: Exited, no marker, reached player_end_date, or gantt_end',
+            );
+            // Trigger exit events for remaining tasks
+            this.overlapping_tasks.forEach((id) => {
+                const task = this.get_task(id);
+                this.eventQueue.set(id, { task, state: 'exit' });
+                console.log(
+                    `task_update: Queued final bar_exit for task id=${id}`,
+                );
+            });
+            this.flushEventQueue();
             return;
         }
 
-        if (
-            this.config.custom_marker_date < this.gantt_start ||
-            this.config.custom_marker_date > this.gantt_end
-        ) {
+        if (this.config.custom_marker_date < this.gantt_start) {
             console.warn(
-                `task_update: custom_marker_date=${this.config.custom_marker_date} is outside gantt_start=${this.gantt_start} to gantt_end=${this.gantt_end}`,
+                `task_update: custom_marker_date=${this.config.custom_marker_date} is before gantt_start=${this.gantt_start}`,
             );
         }
 
@@ -1220,7 +1245,7 @@ export default class Gantt {
             tasksWithBounds
                 .filter(
                     ({ startX, endX }) =>
-                        startX <= currentLeft && currentLeft < endX,
+                        startX <= currentLeft && currentLeft <= endX,
                 )
                 .map(({ task }) => task.id),
         );
@@ -2070,8 +2095,18 @@ export default class Gantt {
                 cancelAnimationFrame(this.scrollAnimationFrame);
                 this.scrollAnimationFrame = null;
             }
+
+            // Trigger bar_exit for all remaining overlapping tasks
+            this.overlapping_tasks.forEach((id) => {
+                const task = this.get_task(id);
+                this.eventQueue.set(id, { task, state: 'exit' });
+                console.log(
+                    `handle_animation_end: Queued final bar_exit for task id=${id}`,
+                );
+            });
             this.flushEventQueue();
             this.flushViewerUpdates();
+
             this.eventQueue.clear();
             this.viewerUpdateQueue.clear();
             this.shadingNodeCache.clear();
