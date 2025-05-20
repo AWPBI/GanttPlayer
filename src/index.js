@@ -101,117 +101,7 @@ export default class Gantt {
         this.config = {
             ignored_dates: [],
             ignored_positions: [],
-            extend_by_units: 10,
-        };
-
-        if (this.options.player_button) {
-            this.options.player_state = false;
-        }
-
-        const view_mode = this.options.view_mode || 'Day';
-        let offsetUnit,
-            offsetAmount = -2;
-        switch (view_mode.toLowerCase()) {
-            case 'hour':
-                offsetUnit = 'hour';
-                break;
-            case 'quarter_day':
-                offsetUnit = 'hour';
-                offsetAmount = -2 * 6;
-                break;
-            case 'half_day':
-                offsetUnit = 'hour';
-                offsetAmount = -2 * 12;
-                break;
-            case 'day':
-                offsetUnit = 'day';
-                break;
-            case 'week':
-                offsetUnit = 'week';
-                break;
-            case 'month':
-                offsetUnit = 'month';
-                break;
-            case 'year':
-                offsetUnit = 'year';
-                break;
-            default:
-                offsetUnit = 'day';
-        }
-
-        if (this.options.custom_marker) {
-            const baseDate = this.options.custom_marker_init_date
-                ? new Date(this.options.custom_marker_init_date)
-                : new Date(this.tasks[0]?._start || Date.now());
-            let newDate = new Date(baseDate);
-            if (offsetUnit === 'week') {
-                newDate.setDate(baseDate.getDate() + offsetAmount * 7);
-            } else if (offsetUnit === 'month') {
-                newDate.setMonth(baseDate.getMonth() + offsetAmount);
-            } else if (offsetUnit === 'year') {
-                newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
-            } else {
-                newDate = date_utils.add(baseDate, offsetAmount, offsetUnit);
-            }
-            this.config.custom_marker_date = newDate;
-            console.log(
-                `setup_options: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
-            );
-        }
-
-        if (this.options.player_end_date) {
-            this.config.player_end_date = new Date(
-                this.options.player_end_date,
-            );
-        }
-        if (typeof this.options.ignore !== 'function') {
-            if (typeof this.options.ignore === 'string')
-                this.options.ignore = [this.options.ignore];
-            for (let option of this.options.ignore) {
-                if (typeof option === 'function') {
-                    this.config.ignored_function = option;
-                    continue;
-                }
-                if (typeof option === 'string') {
-                    if (option === 'weekend')
-                        this.config.ignored_function = (d) =>
-                            d.getDay() == 6 || d.getDay() == 0;
-                    else this.config.ignored_dates.push(new Date(option + ' '));
-                }
-            }
-        } else {
-            this.config.ignored_function = this.options.ignore;
-        }
-    }
-
-    setup_options(options) {
-        this.original_options = options;
-        this.options = {
-            ...DEFAULT_OPTIONS,
-            ...options,
-            task_interval: options.task_interval || 30,
-            viewer_debounce_interval: options.viewer_debounce_interval || 100,
-            event_debounce_interval: options.event_debounce_interval || 20,
-        };
-        const CSS_VARIABLES = {
-            'grid-height': 'container_height',
-            'bar-height': 'bar_height',
-            'lower-header-height': 'lower_header_height',
-            'upper-header-height': 'upper_header_height',
-        };
-        for (let name in CSS_VARIABLES) {
-            let setting = this.options[CSS_VARIABLES[name]];
-            if (setting !== 'auto')
-                this.$container.style.setProperty(
-                    '--gv-' + name,
-                    setting + 'px',
-                );
-        }
-
-        this.config = {
-            ignored_dates: [],
-            ignored_positions: [],
-            extend_by_units: 10,
+            extend_by_units: 5, // Reduced from 10
         };
 
         if (this.options.player_button) {
@@ -358,7 +248,6 @@ export default class Gantt {
             );
         }
     }
-
     setup_dependencies() {
         this.dependency_map = {};
         for (let t of this.tasks) {
@@ -437,6 +326,16 @@ export default class Gantt {
             }
         }
 
+        if (!this.gantt_start || !this.gantt_end) {
+            console.warn(
+                'setup_gantt_dates: No valid tasks, setting default dates',
+            );
+            const today = new Date();
+            this.gantt_start = today;
+            this.gantt_end = date_utils.add(today, 1, 'day');
+        }
+
+        // Apply run-up offset to gantt_start
         if (
             this.config.custom_marker_date &&
             this.config.custom_marker_date < this.gantt_start
@@ -450,25 +349,74 @@ export default class Gantt {
             );
         }
 
+        // Align dates to view mode unit
         this.gantt_start = date_utils.start_of(
             this.gantt_start,
             this.config.unit,
         );
         this.gantt_end = date_utils.start_of(this.gantt_end, this.config.unit);
 
-        this.gantt_start = date_utils.add(
-            this.gantt_start,
-            -this.config.extend_by_units,
-            this.config.unit,
-        );
-        this.gantt_end = date_utils.add(
-            this.gantt_end,
-            this.config.extend_by_units,
-            this.config.unit,
+        // Apply 2-unit offset to gantt_end
+        const view_mode = this.options.view_mode || 'Day';
+        let offsetUnit,
+            offsetAmount = 2; // Positive for end date
+        switch (view_mode.toLowerCase()) {
+            case 'hour':
+                offsetUnit = 'hour';
+                break;
+            case 'quarter_day':
+                offsetUnit = 'hour';
+                offsetAmount = 2 * 6;
+                break;
+            case 'half_day':
+                offsetUnit = 'hour';
+                offsetAmount = 2 * 12;
+                break;
+            case 'day':
+                offsetUnit = 'day';
+                break;
+            case 'week':
+                offsetUnit = 'week';
+                break;
+            case 'month':
+                offsetUnit = 'month';
+                break;
+            case 'year':
+                offsetUnit = 'year';
+                break;
+            default:
+                offsetUnit = 'day';
+        }
+
+        let newEndDate = new Date(this.gantt_end);
+        if (offsetUnit === 'week') {
+            newEndDate.setDate(this.gantt_end.getDate() + offsetAmount * 7);
+        } else if (offsetUnit === 'month') {
+            newEndDate.setMonth(this.gantt_end.getMonth() + offsetAmount);
+        } else if (offsetUnit === 'year') {
+            newEndDate.setFullYear(this.gantt_end.getFullYear() + offsetAmount);
+        } else {
+            newEndDate = date_utils.add(
+                this.gantt_end,
+                offsetAmount,
+                offsetUnit,
+            );
+        }
+        this.gantt_end = newEndDate;
+        console.log(
+            `setup_gantt_dates: Applied ${offsetAmount} ${offsetUnit} offset to gantt_end=${this.gantt_end}`,
         );
 
+        // Additional timeline extension (optional, reduced from 10 to 5 units)
+        this.gantt_start = date_utils.add(
+            this.gantt_start,
+            -5,
+            this.config.unit,
+        );
+        this.gantt_end = date_utils.add(this.gantt_end, 5, this.config.unit);
+
         console.log(
-            `setup_gantt_dates: gantt_start=${this.gantt_start}, gantt_end=${this.gantt_end}`,
+            `setup_gantt_dates: Final gantt_start=${this.gantt_start}, gantt_end=${this.gantt_end}`,
         );
     }
 
