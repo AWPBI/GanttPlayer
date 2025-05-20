@@ -79,9 +79,9 @@ export default class Gantt {
         this.options = {
             ...DEFAULT_OPTIONS,
             ...options,
-            task_interval: options.task_interval || 100,
-            viewer_debounce_interval: options.viewer_debounce_interval || 200,
-            event_debounce_interval: options.event_debounce_interval || 100,
+            task_interval: options.task_interval || 50, // Faster task updates
+            viewer_debounce_interval: options.viewer_debounce_interval || 100, // Faster viewer updates
+            event_debounce_interval: options.event_debounce_interval || 50, // Faster event triggers
         };
         const CSS_VARIABLES = {
             'grid-height': 'container_height',
@@ -107,11 +107,54 @@ export default class Gantt {
         if (this.options.player_button) {
             this.options.player_state = false;
         }
+
+        // Set view mode and calculate initial offset
+        const view_mode = this.options.view_mode || 'Day';
+        let offsetUnit,
+            offsetAmount = -2; // 2 units in the past
+        switch (view_mode.toLowerCase()) {
+            case 'hour':
+                offsetUnit = 'hour';
+                break;
+            case 'quarter_day':
+                offsetUnit = 'hour';
+                offsetAmount = -2 * 6; // 2 quarter-days = 12 hours
+                break;
+            case 'half_day':
+                offsetUnit = 'hour';
+                offsetAmount = -2 * 12; // 2 half-days = 24 hours
+                break;
+            case 'day':
+                offsetUnit = 'day';
+                break;
+            case 'week':
+                offsetUnit = 'week';
+                break;
+            case 'month':
+                offsetUnit = 'month';
+                break;
+            case 'year':
+                offsetUnit = 'year';
+                break;
+            default:
+                offsetUnit = 'day';
+        }
+
+        // Adjust custom_marker_init_date
         if (this.options.custom_marker) {
-            this.config.custom_marker_date = new Date(
-                this.options.custom_marker_init_date,
+            const baseDate = this.options.custom_marker_init_date
+                ? new Date(this.options.custom_marker_init_date)
+                : new Date(this.tasks[0]?._start || Date.now());
+            this.config.custom_marker_date = date_utils.add(
+                baseDate,
+                offsetAmount,
+                offsetUnit,
+            );
+            console.log(
+                `setup_options: Set custom_marker_date to ${this.config.custom_marker_date} (${offsetAmount} ${offsetUnit}s)`,
             );
         }
+
         if (this.options.player_end_date) {
             this.config.player_end_date = new Date(
                 this.options.player_end_date,
@@ -1109,7 +1152,7 @@ export default class Gantt {
             progress,
         );
 
-        // Process all tasks (remove filter to debug)
+        // Process all tasks
         const tasksWithBounds = this.tasks.map((task) => {
             const startX =
                 (date_utils.diff(
@@ -1135,8 +1178,7 @@ export default class Gantt {
             tasksWithBounds
                 .filter(
                     ({ startX, endX }) =>
-                        startX <= currentLeft + 0.001 &&
-                        currentLeft < endX - 0.001,
+                        startX <= currentLeft && currentLeft < endX,
                 )
                 .map(({ task }) => task.id),
         );
@@ -1171,10 +1213,15 @@ export default class Gantt {
         this.overlapping_tasks = new_overlapping;
         console.log('task_update: eventQueue size:', this.eventQueue.size);
 
-        // Force flush events for debugging
+        // Debounce event triggers
         const now = performance.now();
-        this.flushEventQueue();
-        this.lastEventUpdate = now;
+        if (
+            now - this.lastEventUpdate >=
+            this.options.event_debounce_interval
+        ) {
+            this.flushEventQueue();
+            this.lastEventUpdate = now;
+        }
 
         // Debounce viewer updates
         if (
@@ -1332,9 +1379,49 @@ export default class Gantt {
     }
 
     reset_play() {
-        this.config.custom_marker_date = new Date(
-            this.options.custom_marker_init_date || this.gantt_start,
+        // Recompute offset based on view mode
+        const view_mode = this.options.view_mode || 'Day';
+        let offsetUnit,
+            offsetAmount = -2;
+        switch (view_mode.toLowerCase()) {
+            case 'hour':
+                offsetUnit = 'hour';
+                break;
+            case 'quarter_day':
+                offsetUnit = 'hour';
+                offsetAmount = -2 * 6;
+                break;
+            case 'half_day':
+                offsetUnit = 'hour';
+                offsetAmount = -2 * 12;
+                break;
+            case 'day':
+                offsetUnit = 'day';
+                break;
+            case 'week':
+                offsetUnit = 'week';
+                break;
+            case 'month':
+                offsetUnit = 'month';
+                break;
+            case 'year':
+                offsetUnit = 'year';
+                break;
+            default:
+                offsetUnit = 'day';
+        }
+        const baseDate = this.options.custom_marker_init_date
+            ? new Date(this.options.custom_marker_init_date)
+            : new Date(this.tasks[0]?._start || Date.now());
+        this.config.custom_marker_date = date_utils.add(
+            baseDate,
+            offsetAmount,
+            offsetUnit,
         );
+        console.log(
+            `reset_play: Reset custom_marker_date to ${this.config.custom_marker_date} (${offsetAmount} ${offsetUnit}s)`,
+        );
+
         this.options.player_state = false;
         this.overlapping_tasks.clear();
         this.lastTaskY = null;
@@ -1714,6 +1801,9 @@ export default class Gantt {
             this.config.unit,
         );
 
+        // Trigger task update synchronously to catch events at step boundaries
+        this.task_update(performance.now());
+
         // Calculate new position
         const diff_in_units = date_utils.diff(
             this.config.custom_marker_date,
@@ -1944,9 +2034,49 @@ export default class Gantt {
             this.shadingNodeCache.clear();
 
             if (this.options.player_loop) {
-                this.config.custom_marker_date = new Date(
-                    this.options.custom_marker_init_date,
+                // Recompute offset for loop
+                const view_mode = this.options.view_mode || 'Day';
+                let offsetUnit,
+                    offsetAmount = -2;
+                switch (view_mode.toLowerCase()) {
+                    case 'hour':
+                        offsetUnit = 'hour';
+                        break;
+                    case 'quarter_day':
+                        offsetUnit = 'hour';
+                        offsetAmount = -2 * 6;
+                        break;
+                    case 'half_day':
+                        offsetUnit = 'hour';
+                        offsetAmount = -2 * 12;
+                        break;
+                    case 'day':
+                        offsetUnit = 'day';
+                        break;
+                    case 'week':
+                        offsetUnit = 'week';
+                        break;
+                    case 'month':
+                        offsetUnit = 'month';
+                        break;
+                    case 'year':
+                        offsetUnit = 'year';
+                        break;
+                    default:
+                        offsetUnit = 'day';
+                }
+                const baseDate = this.options.custom_marker_init_date
+                    ? new Date(this.options.custom_marker_init_date)
+                    : new Date(this.tasks[0]?._start || Date.now());
+                this.config.custom_marker_date = date_utils.add(
+                    baseDate,
+                    offsetAmount,
+                    offsetUnit,
                 );
+                console.log(
+                    `handle_animation_end: Loop reset custom_marker_date to ${this.config.custom_marker_date} (${offsetAmount} ${offsetUnit}s)`,
+                );
+
                 this.overlapping_tasks.clear();
                 this.lastTaskY = null;
                 this.reset_play();
