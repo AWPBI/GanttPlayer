@@ -19,7 +19,12 @@ export default class Gantt {
         this.change_view_mode();
         this.bind_events();
         this.scrollAnimationFrame = null; // Track animation frame
-        this.task_interval = null;
+        this.taskInterval = null;
+        this.viewerUpdateQueue = new Map();
+        this.lastViewerUpdate = 0;
+        this.eventQueue = new Map();
+        this.lastEventUpdate = 0;
+        this.shadingNodeCache = new Map();
     }
 
     setup_wrapper(element) {
@@ -74,8 +79,10 @@ export default class Gantt {
         this.options = {
             ...DEFAULT_OPTIONS,
             ...options,
-            task_interval: options.task_interval || 100,
-        }; // Add task_interval
+            task_interval: options.task_interval || 100, // Fixed interval for task updates
+            viewer_debounce_interval: options.viewer_debounce_interval || 200,
+            event_debounce_interval: options.event_debounce_interval || 100,
+        };
         const CSS_VARIABLES = {
             'grid-height': 'container_height',
             'bar-height': 'bar_height',
@@ -994,13 +1001,17 @@ export default class Gantt {
         }
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
+            // Trigger initial task update synchronously
+            this.task_update(performance.now());
+            this.flushEventQueue();
+            this.flushViewerUpdates();
             this.player_interval = setInterval(
                 this.player_update.bind(this),
                 this.options.player_interval || 1000,
             );
-            this.task_interval = setInterval(
-                this.task_update.bind(this),
-                this.options.task_interval || 100, // Run task updates every 100ms
+            this.taskInterval = setInterval(
+                this.task_update.bind(this, performance.now()),
+                this.options.task_interval,
             );
             this.trigger_event('start', []);
 
@@ -1021,13 +1032,15 @@ export default class Gantt {
             this.play_animated_highlight(left, this.config.custom_marker_date);
         } else {
             clearInterval(this.player_interval);
-            clearInterval(this.task_interval);
-            this.player_interval = null;
-            this.task_interval = null;
+            clearInterval(this.taskInterval);
             if (this.scrollAnimationFrame) {
                 cancelAnimationFrame(this.scrollAnimationFrame);
                 this.scrollAnimationFrame = null;
             }
+            this.flushEventQueue();
+            this.flushViewerUpdates();
+            this.player_interval = null;
+            this.taskInterval = null;
             this.trigger_event('pause', []);
 
             if (this.options.player_use_fa) {
@@ -1048,7 +1061,7 @@ export default class Gantt {
         }
     }
 
-    task_update() {
+    task_update(currentTime) {
         if (!this.options.player_state) {
             console.log('task_update exited: player_state is false');
             return;
@@ -1063,66 +1076,205 @@ export default class Gantt {
             return;
         }
 
-        // Get the current animation progress
+        // Calculate animation progress
         const animationDuration = (this.options.player_interval || 1000) / 1000;
-        const elapsed =
-            (performance.now() - (this.lastAnimationStart || 0)) / 1000;
+        const elapsed = (currentTime - (this.lastAnimationStart || 0)) / 1000;
         const progress = Math.min(elapsed / animationDuration, 1);
 
-        // Interpolate the current date within the current animation step
-        const startDate = date_utils.add(
-            this.config.custom_marker_date,
-            -this.config.step,
+        // Calculate current highlight position
+        const startDiff = date_utils.diff(
+            date_utils.add(
+                this.config.custom_marker_date,
+                -this.config.step,
+                this.config.unit,
+            ),
+            this.gantt_start,
             this.config.unit,
         );
-        const endDate = this.config.custom_marker_date;
-        const interpolatedDate = new Date(
-            startDate.getTime() +
-                (endDate.getTime() - startDate.getTime()) * progress,
+        const startLeft =
+            (startDiff / this.config.step) * this.config.column_width;
+        const moveDistance = this.config.column_width;
+        const currentLeft = startLeft + moveDistance * progress;
+
+        // Cache task boundaries and filter tasks with dbIds
+        const tasksWithBounds = this.tasks
+            .filter(
+                (task) =>
+                    this.options.phasing_config?.objects[task.id]?.length > 0,
+            )
+            .map((task) => {
+                const startX =
+                    (date_utils.diff(
+                        task._start,
+                        this.gantt_start,
+                        this.config.unit,
+                    ) /
+                        this.config.step) *
+                    this.config.column_width;
+                const endX =
+                    (date_utils.diff(
+                        task._end,
+                        this.gantt_start,
+                        this.config.unit,
+                    ) /
+                        this.config.step) *
+                    this.config.column_width;
+                return { task, startX, endX };
+            });
+
+        // Check tasks overlapping the current highlight position
+        const new_overlapping = new Set(
+            tasksWithBounds
+                .filter(
+                    ({ startX, endX }) =>
+                        startX <= currentLeft + 0.001 &&
+                        currentLeft < endX - 0.001,
+                ) // Precision adjustment
+                .map(({ task }) => task.id),
         );
 
-        // Check tasks at interpolated date (daily granularity for non-day modes)
-        let checkDate = new Date(startDate);
-        const stepUnit = this.view_is('day') ? this.config.unit : 'day';
-        const stepSize = this.view_is('day') ? this.config.step : 1;
+        const entered_tasks = [...new_overlapping].filter(
+            (id) => !this.overlapping_tasks.has(id),
+        );
+        const exited_tasks = [...this.overlapping_tasks].filter(
+            (id) => !new_overlapping.has(id),
+        );
 
-        while (
-            checkDate <= endDate &&
-            checkDate <= (this.config.player_end_date || endDate)
+        // Queue events
+        entered_tasks.forEach((id) => {
+            const task = this.get_task(id);
+            this.eventQueue.set(id, { task, state: 'enter' });
+        });
+
+        exited_tasks.forEach((id) => {
+            const task = this.get_task(id);
+            this.eventQueue.set(id, { task, state: 'exit' });
+        });
+
+        this.overlapping_tasks = new_overlapping;
+
+        // Debounce event triggers
+        const now = performance.now();
+        if (
+            now - this.lastEventUpdate >=
+            this.options.event_debounce_interval
         ) {
-            if (this.options.custom_marker) {
-                const new_overlapping = new Set(
-                    this.tasks
-                        .filter(
-                            (task) =>
-                                task._start <= checkDate &&
-                                checkDate < task._end,
-                        )
-                        .map((task) => task.id),
-                );
-
-                const entered_tasks = [...new_overlapping].filter(
-                    (id) => !this.overlapping_tasks.has(id),
-                );
-                const exited_tasks = [...this.overlapping_tasks].filter(
-                    (id) => !new_overlapping.has(id),
-                );
-
-                entered_tasks.forEach((id) => {
-                    const task = this.get_task(id);
-                    this.trigger_event('bar_enter', [task]);
-                });
-
-                exited_tasks.forEach((id) => {
-                    const task = this.get_task(id);
-                    this.trigger_event('bar_exit', [task]);
-                });
-
-                this.overlapping_tasks = new_overlapping;
-            }
-
-            checkDate = date_utils.add(checkDate, stepSize, stepUnit);
+            this.flushEventQueue();
+            this.lastEventUpdate = now;
         }
+
+        // Debounce viewer updates
+        if (
+            now - this.lastViewerUpdate >=
+            this.options.viewer_debounce_interval
+        ) {
+            this.flushViewerUpdates();
+            this.lastViewerUpdate = now;
+        }
+    }
+
+    debounceViewerUpdates() {
+        const updates = Array.from(this.viewerUpdateQueue.entries());
+        if (
+            !updates.length ||
+            !this.options.dataVizExtn ||
+            !this.options.viewer
+        )
+            return;
+
+        // Cache shading nodes if not already cached
+        if (
+            !this.shadingNodeCache.size &&
+            this.options.dataVizExtn?.surfaceShading?.[1]?.shadingData
+        ) {
+            this.tasks.forEach((task) => {
+                const node =
+                    this.options.dataVizExtn.surfaceShading[1].shadingData.getNodeById(
+                        task.name,
+                    );
+                if (node) {
+                    this.shadingNodeCache.set(task.id, node);
+                }
+            });
+        }
+
+        // Group tasks by state
+        const enterTasks = updates
+            .filter(([_, { state }]) => state === 'enter')
+            .map(([_, { task }]) => task);
+        const exitTasks = updates
+            .filter(([_, { state }]) => state === 'exit')
+            .map(([_, { task }]) => task);
+
+        // Batch visibility updates for enter tasks
+        if (enterTasks.length && this.options.formattingOptions?.clear?.value) {
+            const allDbIds = [];
+            enterTasks.forEach((task) => {
+                const node = this.shadingNodeCache.get(task.id);
+                if (node && node.dbIds?.length) {
+                    allDbIds.push(...node.dbIds);
+                }
+            });
+            if (allDbIds.length) {
+                // Check if dbIds are already visible to skip redundant calls
+                const viewer = this.options.viewer;
+                const visibleDbIds = new Set(
+                    viewer.impl.getVisibleDbIds?.() ||
+                        viewer.model.getVisibleDbIds?.() ||
+                        [],
+                );
+                const dbIdsToShow = allDbIds.filter(
+                    (dbId) => !visibleDbIds.has(dbId),
+                );
+                if (dbIdsToShow.length) {
+                    viewer.show(dbIdsToShow);
+                }
+            }
+        }
+
+        // Batch shading updates
+        if (enterTasks.length || exitTasks.length) {
+            const shadingUpdates = {};
+            enterTasks.forEach((task) => {
+                shadingUpdates[task.name] = (a, b) => 0.6;
+            });
+            exitTasks.forEach((task) => {
+                shadingUpdates[task.name] = (a, b) => 0.3;
+            });
+            // Apply all shading updates in a single call
+            Object.entries(shadingUpdates).forEach(
+                ([taskName, shadingFunc]) => {
+                    this.options.dataVizExtn.renderSurfaceShading(
+                        taskName,
+                        'Progress',
+                        shadingFunc,
+                    );
+                },
+            );
+        }
+
+        this.viewerUpdateQueue.clear();
+    }
+
+    flushEventQueue() {
+        const events = Array.from(this.eventQueue.entries());
+        if (!events.length) return;
+
+        events.forEach(([id, { task, state }]) => {
+            if (state === 'enter') {
+                this.trigger_event('bar_enter', [task]);
+            } else {
+                this.trigger_event('bar_exit', [task]);
+            }
+            this.viewerUpdateQueue.set(id, { task, state });
+        });
+
+        this.eventQueue.clear();
+    }
+
+    flushViewerUpdates() {
+        this.debounceViewerUpdates();
+        this.lastViewerUpdate = performance.now();
     }
 
     reset_play() {
@@ -1133,13 +1285,18 @@ export default class Gantt {
         this.overlapping_tasks.clear();
         this.lastTaskY = null;
         clearInterval(this.player_interval);
-        clearInterval(this.task_interval);
-        this.player_interval = null;
-        this.task_interval = null;
+        clearInterval(this.taskInterval);
         if (this.scrollAnimationFrame) {
             cancelAnimationFrame(this.scrollAnimationFrame);
             this.scrollAnimationFrame = null;
         }
+        this.flushEventQueue();
+        this.flushViewerUpdates();
+        this.eventQueue.clear();
+        this.viewerUpdateQueue.clear();
+        this.shadingNodeCache.clear();
+        this.player_interval = null;
+        this.taskInterval = null;
 
         if (this.options.player_use_fa) {
             this.$player_button.classList.remove('fa-pause');
@@ -1532,8 +1689,8 @@ export default class Gantt {
                         '--move-distance',
                         `${moveDistance}px`,
                     );
-                    el.style.animation = `none`; // Reset animation
-                    el.offsetHeight; // Trigger reflow
+                    el.style.animation = `none`;
+                    el.offsetHeight;
                     el.style.animation = `moveRight ${animationDuration}s linear forwards`;
                     el.style.animationPlayState = 'running';
                 },
@@ -1718,14 +1875,19 @@ export default class Gantt {
                 clearInterval(this.player_interval);
                 this.player_interval = null;
             }
-            if (this.task_interval) {
-                clearInterval(this.task_interval);
-                this.task_interval = null;
+            if (this.taskInterval) {
+                clearInterval(this.taskInterval);
+                this.taskInterval = null;
             }
             if (this.scrollAnimationFrame) {
                 cancelAnimationFrame(this.scrollAnimationFrame);
                 this.scrollAnimationFrame = null;
             }
+            this.flushEventQueue();
+            this.flushViewerUpdates();
+            this.eventQueue.clear();
+            this.viewerUpdateQueue.clear();
+            this.shadingNodeCache.clear();
 
             if (this.options.player_loop) {
                 this.config.custom_marker_date = new Date(
