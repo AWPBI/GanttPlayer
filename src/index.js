@@ -23,6 +23,37 @@ export default class Gantt {
         this.lastEventUpdate = 0;
     }
 
+    // Helper function to calculate initial offset based on view mode
+    get_initial_offset(baseDate, viewMode, unit) {
+        let offsetAmount, offsetUnit;
+        switch (viewMode) {
+            case 'Day':
+                offsetAmount = -2;
+                offsetUnit = 'day';
+                break;
+            case 'Week':
+                offsetAmount = -2;
+                offsetUnit = 'week';
+                break;
+            case 'Month':
+                offsetAmount = -1;
+                offsetUnit = 'month';
+                break;
+            case 'Year':
+                offsetAmount = -1;
+                offsetUnit = 'year';
+                break;
+            default:
+                offsetAmount = -2;
+                offsetUnit = unit || 'day';
+                break;
+        }
+        console.log(
+            `get_initial_offset: viewMode=${viewMode}, offset=${offsetAmount} ${offsetUnit}`,
+        );
+        return date_utils.add(baseDate, offsetAmount, offsetUnit);
+    }
+
     setup_wrapper(element) {
         let svg_element, wrapper_element;
 
@@ -116,11 +147,11 @@ export default class Gantt {
                     ? new Date(this.tasks[0]._start)
                     : new Date();
             }
-            // Set custom_marker_date to 2 intervals before baseDate
-            this.config.custom_marker_date = date_utils.add(
+            // Set custom_marker_date with mode-specific offset
+            this.config.custom_marker_date = this.get_initial_offset(
                 baseDate,
-                -2,
-                this.config.unit || 'day',
+                this.options.view_mode,
+                this.config.unit,
             );
             // Clamp to gantt_start if defined
             if (
@@ -317,6 +348,39 @@ export default class Gantt {
         this.config.view_mode = mode;
         this.update_view_scale(mode);
         this.setup_dates(maintain_pos);
+
+        // Update custom_marker_date with mode-specific offset
+        if (this.options.custom_marker) {
+            let baseDate = this.options.custom_marker_init_date
+                ? new Date(this.options.custom_marker_init_date)
+                : this.tasks[0]?._start
+                  ? new Date(this.tasks[0]._start)
+                  : new Date();
+            if (isNaN(baseDate)) {
+                console.warn(
+                    `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
+                );
+                baseDate = this.tasks[0]?._start
+                    ? new Date(this.tasks[0]._start)
+                    : new Date();
+            }
+            this.config.custom_marker_date = this.get_initial_offset(
+                baseDate,
+                this.options.view_mode,
+                this.config.unit,
+            );
+            // Clamp to gantt_start
+            if (
+                this.gantt_start &&
+                this.config.custom_marker_date < this.gantt_start
+            ) {
+                this.config.custom_marker_date = new Date(this.gantt_start);
+            }
+            console.log(
+                `change_view_mode: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
+            );
+        }
+
         this.render();
         if (maintain_pos) {
             this.$container.scrollLeft = old_pos;
@@ -441,8 +505,10 @@ export default class Gantt {
                 return;
             }
             if (!this.config.custom_marker_date) {
-                this.config.custom_marker_date = new Date(
+                this.config.custom_marker_date = this.get_initial_offset(
                     this.options.custom_marker_init_date || this.gantt_start,
+                    this.options.view_mode,
+                    this.config.unit,
                 );
             }
             if (
@@ -902,8 +968,10 @@ export default class Gantt {
                 !this.config.custom_marker_date ||
                 isNaN(this.config.custom_marker_date)
             ) {
-                this.config.custom_marker_date = new Date(
+                this.config.custom_marker_date = this.get_initial_offset(
                     this.options.custom_marker_init_date || this.gantt_start,
+                    this.options.view_mode,
+                    this.config.unit,
                 );
             }
             if (
@@ -1050,8 +1118,11 @@ export default class Gantt {
 
     toggle_play() {
         if (!this.config.custom_marker_date) {
-            this.config.custom_marker_date =
-                this.options.custom_marker_init_date || new Date();
+            this.config.custom_marker_date = this.get_initial_offset(
+                this.options.custom_marker_init_date || new Date(),
+                this.options.view_mode,
+                this.config.unit,
+            );
         }
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
@@ -1116,11 +1187,11 @@ export default class Gantt {
                 ? new Date(this.tasks[0]._start)
                 : new Date();
         }
-        // Set custom_marker_date to 2 intervals before baseDate
-        this.config.custom_marker_date = date_utils.add(
+        // Set custom_marker_date with mode-specific offset
+        this.config.custom_marker_date = this.get_initial_offset(
             baseDate,
-            -2,
-            this.config.unit || 'day',
+            this.options.view_mode,
+            this.config.unit,
         );
         // Clamp to gantt_start
         if (
@@ -1812,10 +1883,10 @@ export default class Gantt {
                         ? new Date(this.tasks[0]._start)
                         : new Date();
                 } else {
-                    this.config.custom_marker_date = date_utils.add(
+                    this.config.custom_marker_date = this.get_initial_offset(
                         baseDate,
-                        -2,
-                        this.config.unit || 'day',
+                        this.options.view_mode,
+                        this.config.unit,
                     );
                     if (
                         this.gantt_start &&
