@@ -105,20 +105,36 @@ export default class Gantt {
         if (this.options.custom_marker) {
             const baseDate = this.options.custom_marker_init_date
                 ? new Date(this.options.custom_marker_init_date)
-                : new Date(this.tasks[0]?._start || Date.now());
-            this.config.custom_marker_date = new Date(baseDate);
+                : this.tasks[0]?._start
+                  ? new Date(this.tasks[0]._start)
+                  : new Date();
+            if (isNaN(baseDate)) {
+                console.warn(
+                    `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
+                );
+                this.config.custom_marker_date = this.tasks[0]?._start
+                    ? new Date(this.tasks[0]._start)
+                    : new Date();
+            } else {
+                this.config.custom_marker_date = new Date(baseDate);
+            }
             console.log(
                 `setup_options: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
             );
         }
 
         if (this.options.player_end_date) {
-            this.config.player_end_date = new Date(
-                this.options.player_end_date,
-            );
-            console.log(
-                `setup_options: Set player_end_date=${this.config.player_end_date}`,
-            );
+            const endDate = new Date(this.options.player_end_date);
+            if (!isNaN(endDate)) {
+                this.config.player_end_date = endDate;
+                console.log(
+                    `setup_options: Set player_end_date=${this.config.player_end_date}`,
+                );
+            } else {
+                console.warn(
+                    `Invalid player_end_date: ${this.options.player_end_date}`,
+                );
+            }
         }
 
         if (typeof this.options.ignore !== 'function') {
@@ -133,7 +149,14 @@ export default class Gantt {
                     if (option === 'weekend')
                         this.config.ignored_function = (d) =>
                             d.getDay() == 6 || d.getDay() == 0;
-                    else this.config.ignored_dates.push(new Date(option + ' '));
+                    else {
+                        const parsedDate = new Date(option + ' ');
+                        if (!isNaN(parsedDate)) {
+                            this.config.ignored_dates.push(parsedDate);
+                        } else {
+                            console.warn(`Invalid ignore date: ${option}`);
+                        }
+                    }
                 }
             }
         } else {
@@ -158,6 +181,13 @@ export default class Gantt {
                 }
 
                 task._start = date_utils.parse(task.start);
+                if (isNaN(task._start)) {
+                    console.error(
+                        `Invalid start date for task "${task.id}": ${task.start}`,
+                    );
+                    return false;
+                }
+
                 if (task.end === undefined && task.duration !== undefined) {
                     task.end = task._start;
                     let durations = task.duration.split(' ');
@@ -173,6 +203,12 @@ export default class Gantt {
                     return false;
                 }
                 task._end = date_utils.parse(task.end);
+                if (isNaN(task._end)) {
+                    console.error(
+                        `Invalid end date for task "${task.id}": ${task.end}`,
+                    );
+                    return false;
+                }
 
                 let diff = date_utils.diff(task._end, task._start, 'year');
                 if (diff < 0) {
@@ -224,6 +260,11 @@ export default class Gantt {
                 return task;
             })
             .filter((t) => t);
+        if (!this.tasks.length) {
+            console.warn(
+                'No valid tasks provided, initializing with empty tasks',
+            );
+        }
         this.setup_dependencies();
         this.scroll_to_latest_task();
     }
@@ -299,14 +340,14 @@ export default class Gantt {
         if (!this.tasks.length) {
             gantt_start = new Date();
             gantt_end = new Date();
-        }
-
-        for (let task of this.tasks) {
-            if (!gantt_start || task._start < gantt_start) {
-                gantt_start = task._start;
-            }
-            if (!gantt_end || task._end > gantt_end) {
-                gantt_end = task._end;
+        } else {
+            for (let task of this.tasks) {
+                if (!gantt_start || task._start < gantt_start) {
+                    gantt_start = task._start;
+                }
+                if (!gantt_end || task._end > gantt_end) {
+                    gantt_end = task._end;
+                }
             }
         }
 
@@ -350,7 +391,13 @@ export default class Gantt {
         }
         this.config.date_format =
             this.config.view_mode.date_format || this.options.date_format;
-        this.gantt_start.setHours(0, 0, 0, 0);
+        if (this.gantt_start) {
+            this.gantt_start.setHours(0, 0, 0, 0);
+        } else {
+            console.warn('gantt_start is undefined, setting to current date');
+            this.gantt_start = new Date();
+            this.gantt_start.setHours(0, 0, 0, 0);
+        }
     }
 
     setup_date_values() {
@@ -1047,8 +1094,19 @@ export default class Gantt {
     reset_play() {
         const baseDate = this.options.custom_marker_init_date
             ? new Date(this.options.custom_marker_init_date)
-            : new Date(this.tasks[0]?._start || Date.now());
-        this.config.custom_marker_date = new Date(baseDate);
+            : this.tasks[0]?._start
+              ? new Date(this.tasks[0]._start)
+              : new Date();
+        if (isNaN(baseDate)) {
+            console.warn(
+                `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
+            );
+            this.config.custom_marker_date = this.tasks[0]?._start
+                ? new Date(this.tasks[0]._start)
+                : new Date();
+        } else {
+            this.config.custom_marker_date = new Date(baseDate);
+        }
         console.log(
             `reset_play: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
         );
@@ -1430,7 +1488,7 @@ export default class Gantt {
 
         const latestTaskEnd = this.tasks.reduce(
             (latest, task) => (task._end > latest ? task._end : latest),
-            this.tasks[0]._end,
+            this.tasks[0]?._end || this.gantt_end,
         );
 
         if (this.config.custom_marker_date > latestTaskEnd) {
@@ -1652,7 +1710,7 @@ export default class Gantt {
             );
             const latestTaskEnd = this.tasks.reduce(
                 (latest, task) => (task._end > latest ? task._end : latest),
-                this.tasks[0]._end,
+                this.tasks[0]?._end || this.gantt_end,
             );
             const isBeyondEnd =
                 res && this.config.custom_marker_date > latestTaskEnd;
@@ -1721,8 +1779,19 @@ export default class Gantt {
             if (this.options.player_loop) {
                 const baseDate = this.options.custom_marker_init_date
                     ? new Date(this.options.custom_marker_init_date)
-                    : new Date(this.tasks[0]?._start || Date.now());
-                this.config.custom_marker_date = new Date(baseDate);
+                    : this.tasks[0]?._start
+                      ? new Date(this.tasks[0]._start)
+                      : new Date();
+                if (isNaN(baseDate)) {
+                    console.warn(
+                        `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
+                    );
+                    this.config.custom_marker_date = this.tasks[0]?._start
+                        ? new Date(this.tasks[0]._start)
+                        : new Date();
+                } else {
+                    this.config.custom_marker_date = new Date(baseDate);
+                }
                 console.log(
                     `handle_animation_end: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
                 );
@@ -2228,112 +2297,183 @@ export default class Gantt {
             }
 
             $bar_progress.setAttribute('width', $bar_progress.owidth + dx);
-            $bar_progress.finaldx = dx;
-
-            if (dx === 0) return;
-
-            let progress = Math.round(
-                ($bar_progress.getWidth() / $bar.getWidth()) * 100,
+            $.attr(
+                bar.$handle_progression,
+                $.attr(bar.$handle_progress, 'cx', $bar_progress.getEndX()),
             );
-            bar.task.progress = progress;
-            if (progress >= 100) {
-                bar.$bar.classList.add('done');
-                bar.task.done = true;
-            } else {
-                bar.$bar.classList.remove('done');
-                bar.task.done = false;
-            }
+
+            $bar_progress.finaldx = dx;
         });
 
         $.on(this.$svg, 'mouseup', () => {
-            is_resizing = null;
-            if (!bar || !$bar_progress.finaldx) return;
+            is_resizing = false;
+            if (!($bar_progress && $bar_progress.finaldx)) return;
 
-            bar.date_changed();
-            bar.compute_progress();
+            $bar_progress.finaldx = 0;
+            bar.progress_changed();
             bar.set_action_completed();
-            this.hide_popup();
+            bar = null;
+            $bar_progress = null;
+            $bar = null;
         });
     }
 
     get_all_dependent_tasks(task_id) {
-        let tasks = [];
-        let seen = new Set();
+        let out = [];
+        let to_process = [task_id];
+        while (to_process.length) {
+            const deps = to_process.reduce((acc, curr) => {
+                acc = acc.concat(this.dependency_map[curr]);
+                return acc;
+            }, []);
 
-        const collect_deps = (id) => {
-            if (seen.has(id)) return;
-            seen.add(id);
-            const deps = this.dependency_map[id] || [];
-            tasks.push(...deps);
-            deps.forEach(collect_deps);
-        };
+            out = out.concat(deps);
+            to_process = deps.filter((d) => !to_process.includes(d));
+        }
 
-        collect_deps(task_id);
-        return tasks;
+        return out.filter(Boolean);
     }
 
     get_snap_position(dx, ox) {
-        let snap_pos = ox + dx;
-        let snap_pos_in_units = snap_pos / this.config.column_width;
-        snap_pos_in_units = Math.round(snap_pos_in_units * this.config.step);
-        return (
-            (snap_pos_in_units / this.config.step) * this.config.column_width
-        );
+        let unit_length = 1;
+        const default_snap =
+            this.options.snap_at || this.config.view_mode.snap_at || '1d';
+
+        if (default_snap !== 'unit') {
+            const { duration, scale } = date_utils.parse_duration(default_snap);
+            unit_length =
+                date_utils.convert_scales(this.config.view_mode.step, scale) /
+                duration;
+        }
+
+        const rem = dx % (this.config.column_width / unit_length);
+
+        let final_dx =
+            dx -
+            rem +
+            (rem < (this.config.column_width / unit_length) * 2
+                ? 0
+                : this.config.column_width / unit_length);
+        let final_pos = ox + final_dx;
+
+        const drn = final_dx > 0 ? 1 : -1;
+        let ignored_regions = this.get_ignored_region(final_pos, drn);
+        while (ignored_regions.length) {
+            final_pos += this.config.column_width * drn;
+            ignored_regions = this.get_ignored_region(final_pos, drn);
+            if (!ignored_regions.length)
+                final_pos -= this.config.column_width * drn;
+        }
+        return final_pos - ox;
+    }
+
+    get_ignored_region(pos, drn = 1) {
+        if (drn === 1) {
+            return this.config.ignored_positions.filter((val) => {
+                return pos > val && pos <= val + this.config.column_width;
+            });
+        } else {
+            return this.config.ignored_positions.filter(
+                (val) => pos >= val && pos < val + this.config.column_width,
+            );
+        }
     }
 
     unselect_all() {
-        this.$svg
-            .querySelectorAll('.bar-wrapper')
-            .forEach((el) => el.classList.remove('active'));
+        if (this.popup) this.popup.parent.classList.add('hide');
+        this.$container
+            .querySelectorAll('.date-range-highlight')
+            .forEach((k) => k.classList.add('hide'));
     }
 
     view_is(modes) {
         if (typeof modes === 'string') {
-            return this.options.view_mode.toLowerCase() === modes.toLowerCase();
+            return this.config.view_mode.name === modes;
         }
-        return modes
-            .map((m) => m.toLowerCase())
-            .includes(this.options.view_mode.toLowerCase());
+
+        if (Array.isArray(modes)) {
+            return modes.some(view_is);
+        }
+
+        return this.config.view_mode.name === modes.name;
     }
 
     get_task(id) {
-        return this.tasks.find((task) => task.id === id);
+        return this.tasks.find((task) => {
+            return task.id === id;
+        });
     }
 
     get_bar(id) {
-        return this.bars.find((bar) => bar.task.id === id);
+        return this.bars.find((bar) => {
+            return bar.task.id === id;
+        });
     }
 
-    show_popup(args) {
+    show_popup(opts) {
+        if (this.options.popup === false) return;
         if (!this.popup) {
-            this.popup = new Popup(this.$popup_wrapper, this.options);
+            this.popup = new Popup(
+                this.$popup_wrapper,
+                this.options.popup,
+                this,
+            );
         }
-        this.popup.show(args);
+        this.popup.show(opts);
     }
 
     hide_popup() {
-        if (this.popup) this.popup.hide();
+        this.popup && this.popup.hide();
     }
 
     trigger_event(event, args) {
         if (this.options['on_' + event]) {
-            this.options['on_' + event].apply(null, args);
+            this.options['on_' + event].apply(this, args);
         }
+    }
+
+    get_oldest_starting_date() {
+        if (!this.tasks.length) return new Date();
+        return this.tasks
+            .map((task) => task._start)
+            .reduce((prev_date, cur_date) =>
+                cur_date <= prev_date ? cur_date : prev_date,
+            );
     }
 
     clear() {
         this.$svg.innerHTML = '';
-        this.$header?.remove();
-        this.$extras?.remove();
-        this.upperTexts = [];
+        this.$header?.remove?.();
+        this.$side_header?.remove?.();
+        this.$current_highlight?.remove?.();
+        this.$current_ball_highlight?.remove?.();
+        this.$extras?.remove?.();
+        this.popup?.hide?.();
+        if (this.$animated_highlight) {
+            this.$animated_highlight.remove();
+            this.$animated_highlight = null;
+        }
+        if (this.$animated_ball_highlight) {
+            this.$animated_ball_highlight.remove();
+            this.$animated_ball_highlight = null;
+        }
     }
 }
+
+Gantt.VIEW_MODE = {
+    HOUR: DEFAULT_VIEW_MODES[0],
+    QUARTER_DAY: DEFAULT_VIEW_MODES[1],
+    HALF_DAY: DEFAULT_VIEW_MODES[2],
+    DAY: DEFAULT_VIEW_MODES[3],
+    WEEK: DEFAULT_VIEW_MODES[4],
+    MONTH: DEFAULT_VIEW_MODES[5],
+    YEAR: DEFAULT_VIEW_MODES[6],
+};
 
 function generate_id(task) {
     return task.name + '_' + Math.random().toString(36).slice(2, 12);
 }
 
-function sanitize(str) {
-    if (!str) return str;
-    return str.replaceAll(' ', '_').replaceAll('/', '-');
+function sanitize(s) {
+    return s.replaceAll(' ', '_').replaceAll(':', '_').replaceAll('.', '_');
 }
