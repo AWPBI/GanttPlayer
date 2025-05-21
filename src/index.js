@@ -163,10 +163,8 @@ export default class Gantt {
             this.config.player_end_date = new Date(
                 this.options.player_end_date,
             );
-        } else {
-            this.config.player_end_date = this.gantt_end;
             console.log(
-                `setup_options: Set player_end_date to gantt_end=${this.gantt_end}`,
+                `setup_options: Set player_end_date=${this.config.player_end_date}`,
             );
         }
 
@@ -340,6 +338,10 @@ export default class Gantt {
             this.gantt_start = today;
             this.gantt_end = date_utils.add(today, 1, 'day');
         }
+
+        console.log(
+            `setup_gantt_dates: Initial gantt_start=${this.gantt_start}, gantt_end=${this.gantt_end}`,
+        );
 
         // Apply run-up offset to gantt_start
         if (
@@ -1158,25 +1160,8 @@ export default class Gantt {
             return;
         }
 
-        if (
-            !this.config.custom_marker_date ||
-            (this.config.player_end_date &&
-                this.config.custom_marker_date >=
-                    this.config.player_end_date) ||
-            this.config.custom_marker_date >= this.gantt_end
-        ) {
-            console.log(
-                'task_update: Exited, no marker, reached player_end_date, or gantt_end',
-            );
-            // Trigger exit events for remaining tasks
-            this.overlapping_tasks.forEach((id) => {
-                const task = this.get_task(id);
-                this.eventQueue.set(id, { task, state: 'exit' });
-                console.log(
-                    `task_update: Queued final bar_exit for task id=${id}`,
-                );
-            });
-            this.flushEventQueue();
+        if (!this.config.custom_marker_date) {
+            console.log('task_update: Exited, no custom_marker_date');
             return;
         }
 
@@ -1278,6 +1263,42 @@ export default class Gantt {
 
         this.overlapping_tasks = new_overlapping;
         console.log('task_update: eventQueue size:', this.eventQueue.size);
+
+        // Check if playback should continue
+        if (
+            (this.config.player_end_date &&
+                this.config.custom_marker_date >=
+                    this.config.player_end_date) ||
+            this.config.custom_marker_date >= this.gantt_end
+        ) {
+            console.log(
+                'task_update: Reached player_end_date or gantt_end, processing remaining tasks',
+            );
+            // Process all tasks that start before gantt_end
+            const remainingTasks = this.tasks.filter(
+                (task) => task._start <= this.gantt_end,
+            );
+            remainingTasks.forEach((task) => {
+                if (
+                    !this.overlapping_tasks.has(task.id) &&
+                    task._start <= this.config.custom_marker_date
+                ) {
+                    this.eventQueue.set(task.id, { task, state: 'enter' });
+                    console.log(
+                        `task_update: Queued final bar_enter for task id=${task.id}`,
+                    );
+                }
+                if (task._end <= this.config.custom_marker_date) {
+                    this.eventQueue.set(task.id, { task, state: 'exit' });
+                    console.log(
+                        `task_update: Queued final bar_exit for task id=${task.id}`,
+                    );
+                }
+            });
+            this.overlapping_tasks.clear();
+            this.flushEventQueue();
+            return;
+        }
 
         const now = performance.now();
         if (
@@ -2096,14 +2117,23 @@ export default class Gantt {
                 this.scrollAnimationFrame = null;
             }
 
-            // Trigger bar_exit for all remaining overlapping tasks
-            this.overlapping_tasks.forEach((id) => {
-                const task = this.get_task(id);
-                this.eventQueue.set(id, { task, state: 'exit' });
+            // Process all tasks that start before gantt_end
+            const remainingTasks = this.tasks.filter(
+                (task) => task._start <= this.gantt_end,
+            );
+            remainingTasks.forEach((task) => {
+                if (!this.overlapping_tasks.has(task.id)) {
+                    this.eventQueue.set(task.id, { task, state: 'enter' });
+                    console.log(
+                        `handle_animation_end: Queued final bar_enter for task id=${task.id}`,
+                    );
+                }
+                this.eventQueue.set(task.id, { task, state: 'exit' });
                 console.log(
-                    `handle_animation_end: Queued final bar_exit for task id=${id}`,
+                    `handle_animation_end: Queued final bar_exit for task id=${task.id}`,
                 );
             });
+            this.overlapping_tasks.clear();
             this.flushEventQueue();
             this.flushViewerUpdates();
 
