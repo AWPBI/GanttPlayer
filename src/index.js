@@ -25,15 +25,13 @@ export default class Gantt {
 
     // Helper function to calculate initial offset based on view mode
     get_initial_offset(baseDate, viewMode, unit) {
-        // Use earliest task start if available, else fallback to baseDate or current date
-        let earliestStart = this.tasks[0]?._start
-            ? new Date(this.tasks[0]._start)
-            : baseDate || new Date();
-        if (this.tasks.length) {
+        // Use earliest task start if tasks are available, else fallback to baseDate or current date
+        let earliestStart = baseDate || new Date();
+        if (this.tasks && this.tasks.length && this.tasks[0]?._start) {
             earliestStart = this.tasks.reduce(
                 (earliest, task) =>
                     task._start < earliest ? task._start : earliest,
-                earliestStart,
+                new Date(this.tasks[0]._start),
             );
         }
         if (isNaN(earliestStart)) {
@@ -154,25 +152,11 @@ export default class Gantt {
             this.options.player_state = false;
         }
 
+        // Defer custom_marker_date to after tasks are set
         if (this.options.custom_marker) {
-            // Set custom_marker_date with mode-specific offset
-            this.config.custom_marker_date = this.get_initial_offset(
-                this.options.custom_marker_init_date,
-                this.options.view_mode,
-                this.config.unit,
-            );
-            // Clamp to gantt_start if defined
-            if (
-                this.gantt_start &&
-                this.config.custom_marker_date < this.gantt_start
-            ) {
-                this.config.custom_marker_date = new Date(this.gantt_start);
-                console.log(
-                    `setup_options: Clamped custom_marker_date to gantt_start=${this.gantt_start}`,
-                );
-            }
+            this.config.custom_marker_date = null; // Will be set in render or after setup_tasks
             console.log(
-                `setup_options: view_mode=${this.options.view_mode}, custom_marker_date=${this.config.custom_marker_date}`,
+                `setup_options: view_mode=${this.options.view_mode}, custom_marker_date deferred`,
             );
         }
 
@@ -214,17 +198,6 @@ export default class Gantt {
             }
         } else {
             this.config.ignored_function = this.options.ignore;
-        }
-
-        // Ensure highlight is positioned correctly
-        if (this.options.custom_marker) {
-            const diff = date_utils.diff(
-                this.config.custom_marker_date,
-                this.gantt_start,
-                this.config.unit,
-            );
-            const left = (diff / this.config.step) * this.config.column_width;
-            this.play_animated_highlight(left, this.config.custom_marker_date);
         }
     }
 
@@ -373,10 +346,11 @@ export default class Gantt {
 
         // Update custom_marker_date with mode-specific offset
         if (this.options.custom_marker) {
-            let baseDate = this.tasks[0]?._start
-                ? new Date(this.tasks[0]._start)
-                : new Date();
-            if (this.tasks.length) {
+            let baseDate =
+                this.tasks && this.tasks.length && this.tasks[0]?._start
+                    ? new Date(this.tasks[0]._start)
+                    : new Date();
+            if (this.tasks && this.tasks.length) {
                 baseDate = this.tasks.reduce(
                     (earliest, task) =>
                         task._start < earliest ? task._start : earliest,
@@ -409,16 +383,6 @@ export default class Gantt {
 
         // Render and position highlight
         this.render();
-        if (this.options.custom_marker) {
-            const diff = date_utils.diff(
-                this.config.custom_marker_date,
-                this.gantt_start,
-                this.config.unit,
-            );
-            const left = (diff / this.config.step) * this.config.column_width;
-            this.play_animated_highlight(left, this.config.custom_marker_date);
-        }
-
         if (maintain_pos) {
             this.$container.scrollLeft = old_pos;
             this.options.scroll_to = old_scroll_op;
@@ -541,11 +505,25 @@ export default class Gantt {
                 });
                 return;
             }
-            if (!this.config.custom_marker_date) {
+            // Set custom_marker_date if not already set
+            if (this.options.custom_marker && !this.config.custom_marker_date) {
                 this.config.custom_marker_date = this.get_initial_offset(
                     this.options.custom_marker_init_date || this.gantt_start,
                     this.options.view_mode,
                     this.config.unit,
+                );
+                // Clamp to gantt_start
+                if (
+                    this.gantt_start &&
+                    this.config.custom_marker_date < this.gantt_start
+                ) {
+                    this.config.custom_marker_date = new Date(this.gantt_start);
+                    console.log(
+                        `render: Clamped custom_marker_date to gantt_start=${this.gantt_start}`,
+                    );
+                }
+                console.log(
+                    `render: Initialized custom_marker_date=${this.config.custom_marker_date}`,
                 );
             }
             if (
@@ -553,6 +531,9 @@ export default class Gantt {
                 this.config.custom_marker_date > this.gantt_end
             ) {
                 this.config.custom_marker_date = new Date(this.gantt_start);
+                console.log(
+                    `render: Reset custom_marker_date to gantt_start=${this.gantt_start}`,
+                );
             }
 
             this.clear();
@@ -1212,10 +1193,11 @@ export default class Gantt {
 
     reset_play() {
         // Use earliest task start or fallback to current date
-        let baseDate = this.tasks[0]?._start
-            ? new Date(this.tasks[0]._start)
-            : new Date();
-        if (this.tasks.length) {
+        let baseDate =
+            this.tasks && this.tasks.length && this.tasks[0]?._start
+                ? new Date(this.tasks[0]._start)
+                : new Date();
+        if (this.tasks && this.tasks.length) {
             baseDate = this.tasks.reduce(
                 (earliest, task) =>
                     task._start < earliest ? task._start : earliest,
