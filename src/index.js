@@ -16,11 +16,197 @@ export default class Gantt {
         this.setup_tasks(tasks);
         this.overlapping_tasks = new Set();
         this.lastTaskY = null; // Track last known y position
+        this.eventQueue = []; // Queue for bar_enter and bar_exit events
+        this.isProcessingQueue = false; // Flag to prevent concurrent queue processing
         this.change_view_mode();
         this.bind_events();
         this.scrollAnimationFrame = null; // Track animation frame
     }
 
+    // New method to process the event queue sequentially
+    async processEventQueue() {
+        if (this.isProcessingQueue) return;
+        this.isProcessingQueue = true;
+
+        while (this.eventQueue.length > 0) {
+            const { event, task } = this.eventQueue[0];
+            try {
+                await this.options['on_' + event](task);
+            } catch (error) {
+                console.error(
+                    `Error processing ${event} for task ${task.id}:`,
+                    error,
+                );
+            }
+            this.eventQueue.shift(); // Remove the processed event
+        }
+
+        this.isProcessingQueue = false;
+    }
+
+    // Modified to queue events instead of triggering immediately
+    player_update() {
+        if (!this.options.player_state) {
+            console.log('player_update exited: player_state is false');
+            return;
+        }
+
+        // Check if we've reached or passed the end date
+        if (
+            this.config.player_end_date &&
+            this.config.custom_marker_date >= this.config.player_end_date
+        ) {
+            console.log('player_update: reached player_end_date, stopping');
+            this.handle_animation_end();
+            return;
+        }
+
+        // Increment custom marker date
+        this.config.custom_marker_date = date_utils.add(
+            this.config.custom_marker_date,
+            this.config.step,
+            this.config.unit,
+        );
+
+        // Calculate new position
+        const diff_in_units = date_utils.diff(
+            this.config.custom_marker_date,
+            this.gantt_start,
+            this.config.unit,
+        );
+        const newLeft =
+            (diff_in_units / this.config.step) * this.config.column_width;
+
+        // Update animated highlight position
+        if (this.$animated_highlight && this.$animated_ball_highlight) {
+            // Reset animation to start from new position
+            this.$animated_highlight.style.left = `${newLeft}px`;
+            this.$animated_ball_highlight.style.left = `${newLeft - 2}px`;
+
+            const animationDuration =
+                (this.options.player_interval || 1000) / 1000;
+            const moveDistance = this.config.column_width;
+
+            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
+                (el) => {
+                    el.style.setProperty(
+                        '--animation-duration',
+                        `${animationDuration}s`,
+                    );
+                    el.style.setProperty(
+                        '--move-distance',
+                        `${moveDistance}px`,
+                    );
+                    el.style.animation = `none`; // Reset animation
+                    el.offsetHeight; // Trigger reflow
+                    el.style.animation = `moveRight ${animationDuration}s linear forwards`;
+                    el.style.animationPlayState = 'running';
+                },
+            );
+        }
+
+        // Handle overlapping tasks by queuing events
+        if (this.options.custom_marker) {
+            const current_date = this.config.custom_marker_date;
+            const new_overlapping = new Set(
+                this.tasks
+                    .filter(
+                        (task) =>
+                            task._start <= current_date &&
+                            current_date < task._end,
+                    )
+                    .map((task) => task.id),
+            );
+
+            const entered_tasks = [...new_overlapping].filter(
+                (id) => !this.overlapping_tasks.has(id),
+            );
+            const exited_tasks = [...this.overlapping_tasks].filter(
+                (id) => !new_overlapping.has(id),
+            );
+
+            // Queue enter events
+            entered_tasks.forEach((id) => {
+                const task = this.get_task(id);
+                this.eventQueue.push({ event: 'bar_enter', task });
+            });
+
+            // Queue exit events
+            exited_tasks.forEach((id) => {
+                const task = this.get_task(id);
+                this.eventQueue.push({ event: 'bar_exit', task });
+            });
+
+            this.overlapping_tasks = new_overlapping;
+
+            // Process the queue
+            this.processEventQueue();
+        }
+
+        // Start smooth scrolling animation
+        this.start_scroll_animation(newLeft);
+    }
+
+    // Modified to ensure queue is processed before looping or stopping
+    async handle_animation_end() {
+        try {
+            // Wait for the event queue to be fully processed
+            await this.processEventQueue();
+
+            if (this.player_interval) {
+                clearInterval(this.player_interval);
+                this.player_interval = null;
+            }
+            if (this.scrollAnimationFrame) {
+                cancelAnimationFrame(this.scrollAnimationFrame);
+                this.scrollAnimationFrame = null;
+            }
+
+            if (this.options.player_loop) {
+                this.config.custom_marker_date = new Date(
+                    this.options.custom_marker_init_date,
+                );
+                this.overlapping_tasks.clear();
+                this.lastTaskY = null;
+                this.eventQueue = []; // Clear the queue
+                this.render();
+                this.reset_play();
+                this.toggle_play();
+            } else {
+                this.options.player_state = false;
+                this.overlapping_tasks.clear();
+                this.lastTaskY = null;
+                this.eventQueue = []; // Clear the queue
+
+                if (this.$player_button) {
+                    if (this.options.player_use_fa) {
+                        this.$player_button.classList.remove('fa-pause');
+                        this.$player_button.classList.add('fa-play');
+                    } else {
+                        this.$player_button.textContent = 'Play';
+                    }
+                }
+
+                // Pause animated highlight
+                if (this.$animated_highlight) {
+                    this.$animated_highlight.style.animation = 'none';
+                    this.$animated_highlight.style.animationPlayState =
+                        'paused';
+                }
+                if (this.$animated_ball_highlight) {
+                    this.$animated_ball_highlight.style.animation = 'none';
+                    this.$animated_ball_highlight.style.animationPlayState =
+                        'paused';
+                }
+
+                this.trigger_event('finish', []);
+            }
+        } catch (error) {
+            console.error('Error in handle_animation_end:', error);
+        }
+    }
+
+    // Existing methods below remain unchanged (included for completeness)
     setup_wrapper(element) {
         let svg_element, wrapper_element;
 
@@ -127,93 +313,86 @@ export default class Gantt {
 
     update_options(options) {
         this.setup_options({ ...this.original_options, ...options });
-
-        // Recalculate custom_marker_init_date based on new view mode
-        const tasksStartDates = this.tasks.map((task) => task._start);
-        const minDate = tasksStartDates.length
-            ? tasksStartDates.reduce((min, date) => (date < min ? date : min))
-            : new Date();
-        const { duration, scale } = date_utils.parse_duration(
-            this.config.view_mode.step,
-        );
-        this.config.custom_marker_date = date_utils.add(
-            minDate,
-            -2 * duration,
-            scale,
-        );
-        this.options.custom_marker_init_date =
-            this.config.custom_marker_date.toISOString();
-
         this.change_view_mode(undefined, true);
         clearInterval(this.player_interval);
     }
 
-    setup_tasks() {
-        this.tasks.forEach((task, index) => {
-            task._index = index;
+    setup_tasks(tasks) {
+        this.tasks = tasks
+            .map((task, i) => {
+                if (!task.start) {
+                    console.error(
+                        `task "${task.id}" doesn't have a start date`,
+                    );
+                    return false;
+                }
 
-            if (!task.start && !task.end) {
-                const today = date_utils.today();
-                task._start = today;
-                task._end = date_utils.add(
-                    today,
-                    task.actual_duration || 2,
-                    'day',
-                );
-            } else {
-                task._start = task.start
-                    ? date_utils.parse(task.start)
-                    : date_utils.parse(task.end);
-                task._end = task.end
-                    ? date_utils.parse(task.end)
-                    : date_utils.add(
-                          task._start,
-                          task.actual_duration || 2,
-                          'day',
-                      );
-            }
+                task._start = date_utils.parse(task.start);
+                if (task.end === undefined && task.duration !== undefined) {
+                    task.end = task._start;
+                    let durations = task.duration.split(' ');
 
-            // Calculate bar position
-            const start_diff = date_utils.diff(
-                task._start,
-                this.gantt_start,
-                this.config.unit,
-            );
-            task._left =
-                (start_diff / this.config.step) * this.config.column_width;
+                    durations.forEach((tmpDuration) => {
+                        let { duration, scale } =
+                            date_utils.parse_duration(tmpDuration);
+                        task.end = date_utils.add(task.end, duration, scale);
+                    });
+                }
+                if (!task.end) {
+                    console.error(`task "${task.id}" doesn't have an end date`);
+                    return false;
+                }
+                task._end = date_utils.parse(task.end);
 
-            const end_diff = date_utils.diff(
-                task._end,
-                this.gantt_start,
-                this.config.unit,
-            );
-            task._width =
-                ((end_diff - start_diff) / this.config.step) *
-                this.config.column_width;
+                let diff = date_utils.diff(task._end, task._start, 'year');
+                if (diff < 0) {
+                    console.error(
+                        `start of task can't be after end of task: in task "${task.id}"`,
+                    );
+                    return false;
+                }
 
-            // Ensure minimum width
-            if (task._width < this.config.column_width / 2) {
-                task._width = this.config.column_width / 2;
-            }
+                if (date_utils.diff(task._end, task._start, 'year') > 10) {
+                    console.error(
+                        `the duration of task "${task.id}" is too long (above ten years)`,
+                    );
+                    return false;
+                }
 
-            // Set bar y position
-            task._y =
-                this.config.padding +
-                index * (this.config.bar_height + this.config.padding);
-        });
+                task._index = i;
 
-        console.log('setup_tasks:', {
-            tasks: this.tasks.map((t) => ({
-                id: t.id,
-                start: t._start,
-                end: t._end,
-                left: t._left,
-                width: t._width,
-                y: t._y,
-            })),
-            gantt_start: this.gantt_start,
-            view_mode: this.config.view_mode.name,
-        });
+                const task_end_values = date_utils.get_date_values(task._end);
+                if (task_end_values.slice(3).every((d) => d === 0)) {
+                    task._end = date_utils.add(task._end, 24, 'hour');
+                }
+
+                if (
+                    typeof task.dependencies === 'string' ||
+                    !task.dependencies
+                ) {
+                    let deps = [];
+                    if (task.dependencies) {
+                        deps = task.dependencies
+                            .split(',')
+                            .map((d) => d.trim().replaceAll(' ', '_'))
+                            .filter((d) => d);
+                    }
+                    task.dependencies = deps;
+                }
+
+                if (!task.id) {
+                    task.id = generate_id(task);
+                } else if (typeof task.id === 'string') {
+                    task.id = task.id.replaceAll(' ', '_');
+                } else {
+                    task.id = `${task.id}`;
+                }
+
+                return task;
+            })
+            .filter((t) => t);
+        this.setup_dependencies();
+        this.scroll_to_latest_task(); // Scroll to the latest task after setup
     }
 
     setup_dependencies() {
@@ -252,32 +431,7 @@ export default class Gantt {
         this.options.view_mode = mode.name;
         this.config.view_mode = mode;
         this.update_view_scale(mode);
-
-        // Recalculate custom_marker_date based on new view mode
-        const tasksStartDates = this.tasks.map((task) => task._start);
-        const minDate = tasksStartDates.length
-            ? tasksStartDates.reduce((min, date) => (date < min ? date : min))
-            : new Date();
-        const { duration, scale } = date_utils.parse_duration(
-            this.config.view_mode.step,
-        );
-        this.config.custom_marker_date = date_utils.add(
-            minDate,
-            -2 * duration,
-            scale,
-        );
-        this.options.custom_marker_init_date =
-            this.config.custom_marker_date.toISOString();
-
-        console.log('change_view_mode:', {
-            view_mode: mode.name,
-            minDate: minDate,
-            custom_marker_date: this.config.custom_marker_date,
-            gantt_start: this.gantt_start,
-        });
-
         this.setup_dates(maintain_pos);
-        this.setup_tasks();
         this.render();
         if (maintain_pos) {
             this.$container.scrollLeft = old_pos;
@@ -307,85 +461,63 @@ export default class Gantt {
         this.setup_date_values();
     }
 
-    setup_gantt_dates(refresh = false) {
+    setup_gantt_dates(refresh) {
         let gantt_start, gantt_end;
         if (!this.tasks.length) {
-            gantt_start = date_utils.today();
-            gantt_end = date_utils.add(gantt_start, 1, 'day');
-        } else {
-            gantt_start = this.tasks.reduce(
-                (min, task) => (task._start < min ? task._start : min),
-                this.tasks[0]._start,
-            );
-            gantt_end = this.tasks.reduce(
-                (max, task) => (task._end > max ? task._end : max),
-                this.tasks[0]._end,
-            );
+            gantt_start = new Date();
+            gantt_end = new Date();
         }
 
-        // Adjust gantt_start to include the custom_marker_date (2 increments before)
-        const { duration, scale } = date_utils.parse_duration(
-            this.config.view_mode.step,
-        );
-        const markerStart = date_utils.add(gantt_start, -2 * duration, scale);
-        gantt_start = markerStart < gantt_start ? markerStart : gantt_start;
+        for (let task of this.tasks) {
+            if (!gantt_start || task._start < gantt_start) {
+                gantt_start = task._start;
+            }
+            if (!gantt_end || task._end > gantt_end) {
+                gantt_end = task._end;
+            }
+        }
 
         gantt_start = date_utils.start_of(gantt_start, this.config.unit);
         gantt_end = date_utils.start_of(gantt_end, this.config.unit);
 
         if (!refresh) {
-            this.gantt_start = gantt_start;
-            this.gantt_end = date_utils.add(gantt_end, 1, this.config.unit);
+            if (!this.options.infinite_padding) {
+                if (typeof this.config.view_mode.padding === 'string')
+                    this.config.view_mode.padding = [
+                        this.config.view_mode.padding,
+                        this.config.view_mode.padding,
+                    ];
 
-            // Apply padding if specified
-            if (
-                !this.options.infinite_padding &&
-                this.config.view_mode.padding
-            ) {
-                let [padding_start, padding_end] = Array.isArray(
-                    this.config.view_mode.padding,
-                )
-                    ? this.config.view_mode.padding
-                    : [
-                          this.config.view_mode.padding,
-                          this.config.view_mode.padding,
-                      ];
-                padding_start = date_utils.parse_duration(padding_start);
-                padding_end = date_utils.parse_duration(padding_end);
+                let [padding_start, padding_end] =
+                    this.config.view_mode.padding.map(
+                        date_utils.parse_duration,
+                    );
                 this.gantt_start = date_utils.add(
-                    this.gantt_start,
+                    gantt_start,
                     -padding_start.duration,
                     padding_start.scale,
                 );
                 this.gantt_end = date_utils.add(
-                    this.gantt_end,
+                    gantt_end,
                     padding_end.duration,
                     padding_end.scale,
                 );
-            } else if (this.options.infinite_padding) {
+            } else {
                 this.gantt_start = date_utils.add(
-                    this.gantt_start,
-                    -this.config.extend_by_units,
+                    gantt_start,
+                    -this.config.extend_by_units * 3,
                     this.config.unit,
                 );
                 this.gantt_end = date_utils.add(
-                    this.gantt_end,
-                    this.config.extend_by_units,
+                    gantt_end,
+                    this.config.extend_by_units * 3,
                     this.config.unit,
                 );
             }
         }
-
         this.config.date_format =
             this.config.view_mode.date_format || this.options.date_format;
         this.gantt_start.setHours(0, 0, 0, 0);
-
-        console.log('setup_gantt_dates:', {
-            gantt_start: this.gantt_start,
-            gantt_end: this.gantt_end,
-            view_mode: this.config.view_mode.name,
-            custom_marker_date: this.config.custom_marker_date,
-        });
     }
 
     setup_date_values() {
@@ -823,7 +955,6 @@ export default class Gantt {
     }
 
     highlight_custom(date) {
-        // Deprecated: No longer used as we rely solely on animated-highlight
         console.warn(
             'highlight_custom is deprecated; using animated-highlight instead',
         );
@@ -877,7 +1008,6 @@ export default class Gantt {
 
         this.highlight_current();
         if (this.options.custom_marker) {
-            // Ensure custom_marker_date is valid
             if (
                 !this.config.custom_marker_date ||
                 isNaN(this.config.custom_marker_date)
@@ -905,7 +1035,7 @@ export default class Gantt {
     play_animated_highlight(left, dateObj) {
         let adjustedLeft = left;
         let adjustedDateObj = dateObj;
-        if (!dateObj || isNaN(left) || left < 0) {
+        if (!dateObj || isNaN(left) || left === 0) {
             adjustedDateObj =
                 this.config.custom_marker_date || new Date(this.gantt_start);
             adjustedLeft =
@@ -916,20 +1046,8 @@ export default class Gantt {
                 ) /
                     this.config.step) *
                 this.config.column_width;
-            if (adjustedLeft < 0) {
-                adjustedLeft = 0; // Prevent negative position
-            }
         }
 
-        console.log('play_animated_highlight:', {
-            date: adjustedDateObj,
-            gantt_start: this.gantt_start,
-            unit: this.config.unit,
-            step: this.config.step,
-            left: adjustedLeft,
-        });
-
-        // Calculate grid height dynamically
         let gridHeight = this.grid_height || 1152;
         const gridElement = this.$svg.querySelector('.grid-background');
         if (gridElement) {
@@ -942,7 +1060,6 @@ export default class Gantt {
             );
         }
 
-        // Create or update animated highlight
         if (!this.$animated_highlight) {
             this.$animated_highlight = this.create_el({
                 top: this.config.header_height,
@@ -958,7 +1075,6 @@ export default class Gantt {
             this.$animated_highlight.style.height = `${gridHeight - this.config.header_height}px`;
         }
 
-        // Create or update animated ball highlight
         if (!this.$animated_ball_highlight) {
             this.$animated_ball_highlight = this.create_el({
                 top: this.config.header_height - 6,
@@ -973,7 +1089,6 @@ export default class Gantt {
             this.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
         }
 
-        // Set animation properties only if player_state is true
         if (this.options.player_state) {
             let animationDuration =
                 (this.options.player_interval || 1000) / 1000;
@@ -1029,7 +1144,6 @@ export default class Gantt {
                 },
             );
         } else {
-            // Ensure animation is paused
             [this.$animated_highlight, this.$animated_ball_highlight].forEach(
                 (el) => {
                     el.style.animation = 'none';
@@ -1064,7 +1178,6 @@ export default class Gantt {
                 this.$player_button.textContent = 'Pause';
             }
 
-            // Update animated highlight to start animation
             const diff = date_utils.diff(
                 this.config.custom_marker_date,
                 this.gantt_start,
@@ -1088,7 +1201,6 @@ export default class Gantt {
                 this.$player_button.textContent = 'Play';
             }
 
-            // Pause animation
             if (this.$animated_highlight) {
                 this.$animated_highlight.style.animationPlayState = 'paused';
             }
@@ -1100,21 +1212,13 @@ export default class Gantt {
     }
 
     reset_play() {
-        const tasksStartDates = this.tasks.map((task) => task._start);
-        const minDate = tasksStartDates.length
-            ? tasksStartDates.reduce((min, date) => (date < min ? date : min))
-            : new Date();
-        const { duration, scale } = date_utils.parse_duration(
-            this.config.view_mode.step,
-        );
-        this.config.custom_marker_date = date_utils.add(
-            minDate,
-            -2 * duration,
-            scale,
+        this.config.custom_marker_date = new Date(
+            this.options.custom_marker_init_date || this.gantt_start,
         );
         this.options.player_state = false;
         this.overlapping_tasks.clear();
         this.lastTaskY = null;
+        this.eventQueue = []; // Clear the queue
         clearInterval(this.player_interval);
         this.player_interval = null;
         if (this.scrollAnimationFrame) {
@@ -1129,7 +1233,6 @@ export default class Gantt {
             this.$player_button.textContent = 'Play';
         }
 
-        // Preserve animated highlights and update their position
         this.render();
         const diff = date_utils.diff(
             this.config.custom_marker_date,
@@ -1381,8 +1484,6 @@ export default class Gantt {
         const res = this.get_closest_date_to(this.config.custom_marker_date);
         if (!res) return;
 
-        // Scrolling is handled by start_scroll_animation in player_update
-        // Only handle end condition here
         if (
             this.config.player_end_date &&
             res[0] >= this.config.player_end_date
@@ -1394,13 +1495,11 @@ export default class Gantt {
     scroll_to_latest_task() {
         if (!this.tasks.length) return;
 
-        // Find tasks active at the initial custom_marker_date (or use earliest start)
         const currentDate = this.config.custom_marker_date || this.gantt_start;
         const activeTasks = this.tasks.filter(
             (task) => task._start <= currentDate && currentDate <= task._end,
         );
 
-        // If no active tasks, fall back to the task with the earliest start
         const targetTask = activeTasks.length
             ? activeTasks.reduce(
                   (min, task) => (task._index < min._index ? task : min),
@@ -1412,16 +1511,13 @@ export default class Gantt {
                   this.tasks[0],
               );
 
-        // Find the corresponding bar-wrapper element
         const barWrapper = this.$svg.querySelector(
             `.bar-wrapper[data-id="${targetTask.id}"]`,
         );
 
         let taskY;
         if (barWrapper) {
-            // Get the y attribute from the bar-wrapper
             taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
-            // Validate taskY; if 0, calculate based on index
             if (taskY === 0) {
                 taskY =
                     this.config.header_height +
@@ -1429,143 +1525,38 @@ export default class Gantt {
                         (this.options.bar_height + this.options.padding);
             }
         } else {
-            // Fallback: calculate y based on task index
             taskY =
                 this.config.header_height +
                 targetTask._index *
                     (this.options.bar_height + this.options.padding);
         }
 
-        // Store the initial taskY
         this.lastTaskY = taskY;
 
-        // Adjust for header height to align with scroll container's coordinate system
         const adjustedY = taskY - this.config.header_height;
 
-        // Calculate the desired scroll position to position the task near the top of the viewport
         const viewportHeight = this.$container.clientHeight;
-        const offset = this.options.padding; // Small offset from top for visibility
+        const offset = this.options.padding;
         let targetScrollTop = adjustedY - offset;
 
-        // Ensure scrollTop is within bounds
         const maxScrollTop = this.$container.scrollHeight - viewportHeight;
         const clampedScrollTop = Math.max(
             0,
             Math.min(targetScrollTop, maxScrollTop),
         );
 
-        // Scroll to the calculated position
         this.$container.scrollTo({
             top: clampedScrollTop,
             behavior: 'smooth',
         });
     }
 
-    player_update() {
-        if (!this.options.player_state) {
-            console.log('player_update exited: player_state is false');
-            return;
-        }
-
-        // Check if we've reached or passed the end date
-        if (
-            this.config.player_end_date &&
-            this.config.custom_marker_date >= this.config.player_end_date
-        ) {
-            console.log('player_update: reached player_end_date, stopping');
-            this.handle_animation_end();
-            return;
-        }
-
-        // Increment custom marker date
-        this.config.custom_marker_date = date_utils.add(
-            this.config.custom_marker_date,
-            this.config.step,
-            this.config.unit,
-        );
-
-        // Calculate new position
-        const diff_in_units = date_utils.diff(
-            this.config.custom_marker_date,
-            this.gantt_start,
-            this.config.unit,
-        );
-        const newLeft =
-            (diff_in_units / this.config.step) * this.config.column_width;
-
-        // Update animated highlight position
-        if (this.$animated_highlight && this.$animated_ball_highlight) {
-            // Reset animation to start from new position
-            this.$animated_highlight.style.left = `${newLeft}px`;
-            this.$animated_ball_highlight.style.left = `${newLeft - 2}px`;
-
-            const animationDuration =
-                (this.options.player_interval || 1000) / 1000;
-            const moveDistance = this.config.column_width;
-
-            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
-                (el) => {
-                    el.style.setProperty(
-                        '--animation-duration',
-                        `${animationDuration}s`,
-                    );
-                    el.style.setProperty(
-                        '--move-distance',
-                        `${moveDistance}px`,
-                    );
-                    el.style.animation = `none`; // Reset animation
-                    el.offsetHeight; // Trigger reflow
-                    el.style.animation = `moveRight ${animationDuration}s linear forwards`;
-                    el.style.animationPlayState = 'running';
-                },
-            );
-        }
-
-        // Handle overlapping tasks
-        if (this.options.custom_marker) {
-            const current_date = this.config.custom_marker_date;
-            const new_overlapping = new Set(
-                this.tasks
-                    .filter(
-                        (task) =>
-                            task._start <= current_date &&
-                            current_date < task._end,
-                    )
-                    .map((task) => task.id),
-            );
-
-            const entered_tasks = [...new_overlapping].filter(
-                (id) => !this.overlapping_tasks.has(id),
-            );
-            const exited_tasks = [...this.overlapping_tasks].filter(
-                (id) => !new_overlapping.has(id),
-            );
-
-            entered_tasks.forEach((id) => {
-                const task = this.get_task(id);
-                this.trigger_event('bar_enter', [task]);
-            });
-
-            exited_tasks.forEach((id) => {
-                const task = this.get_task(id);
-                this.trigger_event('bar_exit', [task]);
-            });
-
-            this.overlapping_tasks = new_overlapping;
-        }
-
-        // Start smooth scrolling animation
-        this.start_scroll_animation(newLeft);
-    }
-
     start_scroll_animation(startLeft) {
-        // Cancel any existing animation frame
         if (this.scrollAnimationFrame) {
             cancelAnimationFrame(this.scrollAnimationFrame);
             this.scrollAnimationFrame = null;
         }
 
-        // Exit if player is not active
         if (!this.options.player_state) {
             console.log('start_scroll_animation exited: player_state is false');
             return;
@@ -1578,33 +1569,25 @@ export default class Gantt {
         const viewportWidth = container.clientWidth;
         const maxScroll = container.scrollWidth - viewportWidth;
 
-        // Desired offset to keep highlight in view (e.g., 1/6th of viewport from left)
         const offset = viewportWidth / 6;
 
         const animateScroll = (currentTime) => {
-            // Exit if player is not active
             if (!this.options.player_state) {
                 console.log('animateScroll exited: player_state is false');
                 this.scrollAnimationFrame = null;
                 return;
             }
 
-            const elapsed = (currentTime - startTime) / 1000; // Time in seconds
-            const progress = Math.min(elapsed / animationDuration, 1); // Animation progress [0,1]
-            const currentLeft = startLeft + moveDistance * progress; // Current highlight position
+            const elapsed = (currentTime - startTime) / 1000;
+            const progress = Math.min(elapsed / animationDuration, 1);
+            const currentLeft = startLeft + moveDistance * progress;
 
-            // Calculate desired scroll position to keep highlight in view
             let targetScroll = currentLeft - offset;
-
-            // Clamp scroll position to chart bounds
             targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
 
-            // Update horizontal scroll position
             container.scrollLeft = targetScroll;
 
-            // Update vertical scroll to track the active task
             if (this.tasks.length) {
-                // Find tasks active at the current custom_marker_date
                 const currentDate = this.config.custom_marker_date;
                 const activeTasks = this.tasks.filter(
                     (task) =>
@@ -1613,21 +1596,17 @@ export default class Gantt {
 
                 let taskY;
                 if (activeTasks.length) {
-                    // Select the task with the lowest _index (highest in chart)
                     const targetTask = activeTasks.reduce(
                         (min, task) => (task._index < min._index ? task : min),
                         activeTasks[0],
                     );
 
-                    // Find the corresponding bar-wrapper element
                     const barWrapper = this.$svg.querySelector(
                         `.bar-wrapper[data-id="${targetTask.id}"]`,
                     );
 
                     if (barWrapper) {
-                        // Get the y attribute from the bar-wrapper
                         taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
-                        // Validate taskY; if 0, calculate based on index
                         if (taskY === 0) {
                             taskY =
                                 this.config.header_height +
@@ -1636,7 +1615,6 @@ export default class Gantt {
                                         this.options.padding);
                         }
                     } else {
-                        // Fallback: calculate y based on task index
                         taskY =
                             this.config.header_height +
                             targetTask._index *
@@ -1644,13 +1622,10 @@ export default class Gantt {
                                     this.options.padding);
                     }
 
-                    // Update lastTaskY with the current task's y position
                     this.lastTaskY = taskY;
                 } else if (this.lastTaskY !== null) {
-                    // Use the last known taskY during gaps
                     taskY = this.lastTaskY;
                 } else {
-                    // Fallback: use the task with the earliest start
                     const targetTask = this.tasks.reduce(
                         (earliest, task) =>
                             task._start < earliest._start ? task : earliest,
@@ -1678,30 +1653,24 @@ export default class Gantt {
                                     this.options.padding);
                     }
 
-                    // Initialize lastTaskY
                     this.lastTaskY = taskY;
                 }
 
-                // Adjust for header height to align with scroll container's coordinate system
                 const adjustedY = taskY - this.config.header_height;
 
-                // Calculate the desired scroll position to position the task near the top of the viewport
                 const viewportHeight = container.clientHeight;
-                const verticalOffset = this.options.padding; // Small offset from top for visibility
+                const verticalOffset = this.options.padding;
                 let targetScrollTop = adjustedY - verticalOffset;
 
-                // Ensure scrollTop is within bounds
                 const maxScrollTop = container.scrollHeight - viewportHeight;
                 const clampedScrollTop = Math.max(
                     0,
                     Math.min(targetScrollTop, maxScrollTop),
                 );
 
-                // Update vertical scroll position
                 container.scrollTop = clampedScrollTop;
             }
 
-            // Check if animation should continue
             const res = this.get_closest_date_to(
                 this.config.custom_marker_date,
             );
@@ -1711,7 +1680,6 @@ export default class Gantt {
                     : false;
 
             if (progress < 1 && !isBeyondEnd) {
-                // Continue animation
                 this.scrollAnimationFrame =
                     requestAnimationFrame(animateScroll);
             } else {
@@ -1722,67 +1690,7 @@ export default class Gantt {
             }
         };
 
-        // Start animation
         this.scrollAnimationFrame = requestAnimationFrame(animateScroll);
-    }
-
-    handle_animation_end() {
-        try {
-            if (this.player_interval) {
-                clearInterval(this.player_interval);
-                this.player_interval = null;
-            }
-            if (this.scrollAnimationFrame) {
-                cancelAnimationFrame(this.scrollAnimationFrame);
-                this.scrollAnimationFrame = null;
-            }
-
-            if (this.options.player_loop) {
-                this.config.custom_marker_date = new Date(
-                    this.options.custom_marker_init_date,
-                );
-                this.overlapping_tasks.clear();
-                this.lastTaskY = null;
-                // this.render();
-                this.reset_play();
-                this.toggle_play();
-                // if (this.options.player_state) {
-                //     this.player_interval = setInterval(
-                //         this.player_update.bind(this),
-                //         this.options.player_interval || 1000,
-                //     );
-                // }
-            } else {
-                this.options.player_state = false;
-                this.overlapping_tasks.clear();
-                this.lastTaskY = null;
-
-                if (this.$player_button) {
-                    if (this.options.player_use_fa) {
-                        this.$player_button.classList.remove('fa-pause');
-                        this.$player_button.classList.add('fa-play');
-                    } else {
-                        this.$player_button.textContent = 'Play';
-                    }
-                }
-
-                // Pause animated highlight
-                if (this.$animated_highlight) {
-                    this.$animated_highlight.style.animation = 'none';
-                    this.$animated_highlight.style.animationPlayState =
-                        'paused';
-                }
-                if (this.$animated_ball_highlight) {
-                    this.$animated_ball_highlight.style.animation = 'none';
-                    this.$animated_ball_highlight.style.animationPlayState =
-                        'paused';
-                }
-
-                this.trigger_event('finish', []);
-            }
-        } catch (error) {
-            console.error('Error in handle_animation_end:', error);
-        }
     }
 
     get_closest_date_to(date) {
@@ -1940,7 +1848,6 @@ export default class Gantt {
             if (e.target.classList.contains('grid-row')) this.unselect_all();
         };
 
-        let pos = 0;
         $.on(this.$svg, 'mousemove', '.bar-wrapper, .handle', (e) => {
             if (
                 this.bar_being_dragged === false &&
