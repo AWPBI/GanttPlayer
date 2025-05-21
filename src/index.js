@@ -148,82 +148,72 @@ export default class Gantt {
         clearInterval(this.player_interval);
     }
 
-    setup_tasks(tasks) {
-        this.tasks = tasks
-            .map((task, i) => {
-                if (!task.start) {
-                    console.error(
-                        `task "${task.id}" doesn't have a start date`,
-                    );
-                    return false;
-                }
+    setup_tasks() {
+        this.tasks.forEach((task, index) => {
+            task._index = index;
 
-                task._start = date_utils.parse(task.start);
-                if (task.end === undefined && task.duration !== undefined) {
-                    task.end = task._start;
-                    let durations = task.duration.split(' ');
+            if (!task.start && !task.end) {
+                const today = date_utils.today();
+                task._start = today;
+                task._end = date_utils.add(
+                    today,
+                    task.actual_duration || 2,
+                    'day',
+                );
+            } else {
+                task._start = task.start
+                    ? date_utils.parse(task.start)
+                    : date_utils.parse(task.end);
+                task._end = task.end
+                    ? date_utils.parse(task.end)
+                    : date_utils.add(
+                          task._start,
+                          task.actual_duration || 2,
+                          'day',
+                      );
+            }
 
-                    durations.forEach((tmpDuration) => {
-                        let { duration, scale } =
-                            date_utils.parse_duration(tmpDuration);
-                        task.end = date_utils.add(task.end, duration, scale);
-                    });
-                }
-                if (!task.end) {
-                    console.error(`task "${task.id}" doesn't have an end date`);
-                    return false;
-                }
-                task._end = date_utils.parse(task.end);
+            // Calculate bar position
+            const start_diff = date_utils.diff(
+                task._start,
+                this.gantt_start,
+                this.config.unit,
+            );
+            task._left =
+                (start_diff / this.config.step) * this.config.column_width;
 
-                let diff = date_utils.diff(task._end, task._start, 'year');
-                if (diff < 0) {
-                    console.error(
-                        `start of task can't be after end of task: in task "${task.id}"`,
-                    );
-                    return false;
-                }
+            const end_diff = date_utils.diff(
+                task._end,
+                this.gantt_start,
+                this.config.unit,
+            );
+            task._width =
+                ((end_diff - start_diff) / this.config.step) *
+                this.config.column_width;
 
-                if (date_utils.diff(task._end, task._start, 'year') > 10) {
-                    console.error(
-                        `the duration of task "${task.id}" is too long (above ten years)`,
-                    );
-                    return false;
-                }
+            // Ensure minimum width
+            if (task._width < this.config.column_width / 2) {
+                task._width = this.config.column_width / 2;
+            }
 
-                task._index = i;
+            // Set bar y position
+            task._y =
+                this.config.padding +
+                index * (this.config.bar_height + this.config.padding);
+        });
 
-                const task_end_values = date_utils.get_date_values(task._end);
-                if (task_end_values.slice(3).every((d) => d === 0)) {
-                    task._end = date_utils.add(task._end, 24, 'hour');
-                }
-
-                if (
-                    typeof task.dependencies === 'string' ||
-                    !task.dependencies
-                ) {
-                    let deps = [];
-                    if (task.dependencies) {
-                        deps = task.dependencies
-                            .split(',')
-                            .map((d) => d.trim().replaceAll(' ', '_'))
-                            .filter((d) => d);
-                    }
-                    task.dependencies = deps;
-                }
-
-                if (!task.id) {
-                    task.id = generate_id(task);
-                } else if (typeof task.id === 'string') {
-                    task.id = task.id.replaceAll(' ', '_');
-                } else {
-                    task.id = `${task.id}`;
-                }
-
-                return task;
-            })
-            .filter((t) => t);
-        this.setup_dependencies();
-        this.scroll_to_latest_task(); // Scroll to the latest task after setup
+        console.log('setup_tasks:', {
+            tasks: this.tasks.map((t) => ({
+                id: t.id,
+                start: t._start,
+                end: t._end,
+                left: t._left,
+                width: t._width,
+                y: t._y,
+            })),
+            gantt_start: this.gantt_start,
+            view_mode: this.config.view_mode.name,
+        });
     }
 
     setup_dependencies() {
@@ -287,6 +277,7 @@ export default class Gantt {
         });
 
         this.setup_dates(maintain_pos);
+        this.setup_tasks();
         this.render();
         if (maintain_pos) {
             this.$container.scrollLeft = old_pos;
@@ -319,8 +310,8 @@ export default class Gantt {
     setup_gantt_dates(refresh = false) {
         let gantt_start, gantt_end;
         if (!this.tasks.length) {
-            gantt_start = new Date();
-            gantt_end = new Date();
+            gantt_start = date_utils.today();
+            gantt_end = date_utils.add(gantt_start, 1, 'day');
         } else {
             gantt_start = this.tasks.reduce(
                 (min, task) => (task._start < min ? task._start : min),
@@ -332,19 +323,19 @@ export default class Gantt {
             );
         }
 
-        // Ensure gantt_start is at least 2 increments before the earliest task
+        // Adjust gantt_start to include the custom_marker_date (2 increments before)
         const { duration, scale } = date_utils.parse_duration(
             this.config.view_mode.step,
         );
-        const minStart = date_utils.add(gantt_start, -2 * duration, scale);
-        gantt_start = minStart < gantt_start ? minStart : gantt_start;
+        const markerStart = date_utils.add(gantt_start, -2 * duration, scale);
+        gantt_start = markerStart < gantt_start ? markerStart : gantt_start;
 
         gantt_start = date_utils.start_of(gantt_start, this.config.unit);
         gantt_end = date_utils.start_of(gantt_end, this.config.unit);
 
         if (!refresh) {
             this.gantt_start = gantt_start;
-            this.gantt_end = date_utils.add(gantt_end, 2 * duration, scale);
+            this.gantt_end = date_utils.add(gantt_end, 1, this.config.unit);
 
             // Apply padding if specified
             if (
@@ -374,12 +365,12 @@ export default class Gantt {
             } else if (this.options.infinite_padding) {
                 this.gantt_start = date_utils.add(
                     this.gantt_start,
-                    -this.config.extend_by_units * 3,
+                    -this.config.extend_by_units,
                     this.config.unit,
                 );
                 this.gantt_end = date_utils.add(
                     this.gantt_end,
-                    this.config.extend_by_units * 3,
+                    this.config.extend_by_units,
                     this.config.unit,
                 );
             }
@@ -393,6 +384,7 @@ export default class Gantt {
             gantt_start: this.gantt_start,
             gantt_end: this.gantt_end,
             view_mode: this.config.view_mode.name,
+            custom_marker_date: this.config.custom_marker_date,
         });
     }
 
@@ -924,6 +916,9 @@ export default class Gantt {
                 ) /
                     this.config.step) *
                 this.config.column_width;
+            if (adjustedLeft < 0) {
+                adjustedLeft = 0; // Prevent negative position
+            }
         }
 
         console.log('play_animated_highlight:', {
