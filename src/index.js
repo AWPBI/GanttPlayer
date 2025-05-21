@@ -25,6 +25,22 @@ export default class Gantt {
 
     // Helper function to calculate initial offset based on view mode
     get_initial_offset(baseDate, viewMode, unit) {
+        // Use earliest task start if available, else fallback to baseDate or current date
+        let earliestStart = this.tasks[0]?._start
+            ? new Date(this.tasks[0]._start)
+            : baseDate || new Date();
+        if (this.tasks.length) {
+            earliestStart = this.tasks.reduce(
+                (earliest, task) =>
+                    task._start < earliest ? task._start : earliest,
+                earliestStart,
+            );
+        }
+        if (isNaN(earliestStart)) {
+            console.warn(`Invalid earliest start, using current date`);
+            earliestStart = new Date();
+        }
+
         let offsetAmount, offsetUnit;
         switch (viewMode) {
             case 'Day':
@@ -48,10 +64,15 @@ export default class Gantt {
                 offsetUnit = unit || 'day';
                 break;
         }
-        console.log(
-            `get_initial_offset: viewMode=${viewMode}, offset=${offsetAmount} ${offsetUnit}`,
+        const offsetDate = date_utils.add(
+            earliestStart,
+            offsetAmount,
+            offsetUnit,
         );
-        return date_utils.add(baseDate, offsetAmount, offsetUnit);
+        console.log(
+            `get_initial_offset: viewMode=${viewMode}, earliestStart=${earliestStart}, offset=${offsetAmount} ${offsetUnit}, offsetDate=${offsetDate}`,
+        );
+        return offsetDate;
     }
 
     setup_wrapper(element) {
@@ -134,22 +155,9 @@ export default class Gantt {
         }
 
         if (this.options.custom_marker) {
-            let baseDate = this.options.custom_marker_init_date
-                ? new Date(this.options.custom_marker_init_date)
-                : this.tasks[0]?._start
-                  ? new Date(this.tasks[0]._start)
-                  : new Date();
-            if (isNaN(baseDate)) {
-                console.warn(
-                    `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
-                );
-                baseDate = this.tasks[0]?._start
-                    ? new Date(this.tasks[0]._start)
-                    : new Date();
-            }
             // Set custom_marker_date with mode-specific offset
             this.config.custom_marker_date = this.get_initial_offset(
-                baseDate,
+                this.options.custom_marker_init_date,
                 this.options.view_mode,
                 this.config.unit,
             );
@@ -159,9 +167,12 @@ export default class Gantt {
                 this.config.custom_marker_date < this.gantt_start
             ) {
                 this.config.custom_marker_date = new Date(this.gantt_start);
+                console.log(
+                    `setup_options: Clamped custom_marker_date to gantt_start=${this.gantt_start}`,
+                );
             }
             console.log(
-                `setup_options: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
+                `setup_options: view_mode=${this.options.view_mode}, custom_marker_date=${this.config.custom_marker_date}`,
             );
         }
 
@@ -203,6 +214,17 @@ export default class Gantt {
             }
         } else {
             this.config.ignored_function = this.options.ignore;
+        }
+
+        // Ensure highlight is positioned correctly
+        if (this.options.custom_marker) {
+            const diff = date_utils.diff(
+                this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
+            );
+            const left = (diff / this.config.step) * this.config.column_width;
+            this.play_animated_highlight(left, this.config.custom_marker_date);
         }
     }
 
@@ -351,18 +373,19 @@ export default class Gantt {
 
         // Update custom_marker_date with mode-specific offset
         if (this.options.custom_marker) {
-            let baseDate = this.options.custom_marker_init_date
-                ? new Date(this.options.custom_marker_init_date)
-                : this.tasks[0]?._start
-                  ? new Date(this.tasks[0]._start)
-                  : new Date();
-            if (isNaN(baseDate)) {
-                console.warn(
-                    `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
+            let baseDate = this.tasks[0]?._start
+                ? new Date(this.tasks[0]._start)
+                : new Date();
+            if (this.tasks.length) {
+                baseDate = this.tasks.reduce(
+                    (earliest, task) =>
+                        task._start < earliest ? task._start : earliest,
+                    baseDate,
                 );
-                baseDate = this.tasks[0]?._start
-                    ? new Date(this.tasks[0]._start)
-                    : new Date();
+            }
+            if (isNaN(baseDate)) {
+                console.warn(`Invalid baseDate, using current date`);
+                baseDate = new Date();
             }
             this.config.custom_marker_date = this.get_initial_offset(
                 baseDate,
@@ -375,13 +398,27 @@ export default class Gantt {
                 this.config.custom_marker_date < this.gantt_start
             ) {
                 this.config.custom_marker_date = new Date(this.gantt_start);
+                console.log(
+                    `change_view_mode: Clamped custom_marker_date to gantt_start=${this.gantt_start}`,
+                );
             }
             console.log(
                 `change_view_mode: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
             );
         }
 
+        // Render and position highlight
         this.render();
+        if (this.options.custom_marker) {
+            const diff = date_utils.diff(
+                this.config.custom_marker_date,
+                this.gantt_start,
+                this.config.unit,
+            );
+            const left = (diff / this.config.step) * this.config.column_width;
+            this.play_animated_highlight(left, this.config.custom_marker_date);
+        }
+
         if (maintain_pos) {
             this.$container.scrollLeft = old_pos;
             this.options.scroll_to = old_scroll_op;
@@ -1174,18 +1211,20 @@ export default class Gantt {
     }
 
     reset_play() {
-        let baseDate = this.options.custom_marker_init_date
-            ? new Date(this.options.custom_marker_init_date)
-            : this.tasks[0]?._start
-              ? new Date(this.tasks[0]._start)
-              : new Date();
-        if (isNaN(baseDate)) {
-            console.warn(
-                `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
+        // Use earliest task start or fallback to current date
+        let baseDate = this.tasks[0]?._start
+            ? new Date(this.tasks[0]._start)
+            : new Date();
+        if (this.tasks.length) {
+            baseDate = this.tasks.reduce(
+                (earliest, task) =>
+                    task._start < earliest ? task._start : earliest,
+                baseDate,
             );
-            baseDate = this.tasks[0]?._start
-                ? new Date(this.tasks[0]._start)
-                : new Date();
+        }
+        if (isNaN(baseDate)) {
+            console.warn(`Invalid baseDate, using current date`);
+            baseDate = new Date();
         }
         // Set custom_marker_date with mode-specific offset
         this.config.custom_marker_date = this.get_initial_offset(
@@ -1199,6 +1238,9 @@ export default class Gantt {
             this.config.custom_marker_date < this.gantt_start
         ) {
             this.config.custom_marker_date = new Date(this.gantt_start);
+            console.log(
+                `reset_play: Clamped custom_marker_date to gantt_start=${this.gantt_start}`,
+            );
         }
         console.log(
             `reset_play: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
@@ -1223,6 +1265,7 @@ export default class Gantt {
             this.$player_button.textContent = 'Play';
         }
 
+        // Render and position highlight
         this.render();
         const diff = date_utils.diff(
             this.config.custom_marker_date,
