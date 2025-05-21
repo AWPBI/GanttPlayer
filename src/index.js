@@ -343,7 +343,6 @@ export default class Gantt {
             `setup_gantt_dates: Initial gantt_start=${this.gantt_start}, gantt_end=${this.gantt_end}`,
         );
 
-        // Apply run-up offset to gantt_start
         if (
             this.config.custom_marker_date &&
             this.config.custom_marker_date < this.gantt_start
@@ -357,7 +356,6 @@ export default class Gantt {
             );
         }
 
-        // Align dates to view mode unit
         this.gantt_start = date_utils.start_of(
             this.gantt_start,
             this.config.unit,
@@ -368,7 +366,6 @@ export default class Gantt {
         this.gantt_end = date_utils.start_of(this.gantt_end, this.config.unit);
         console.log(`setup_gantt_dates: Aligned gantt_end=${this.gantt_end}`);
 
-        // Apply 2-unit offset to gantt_end
         const view_mode = this.options.view_mode || 'Day';
         let offsetUnit,
             offsetAmount = 2;
@@ -425,7 +422,6 @@ export default class Gantt {
             `setup_gantt_dates: Applied ${offsetAmount} ${offsetUnit} offset to gantt_end=${this.gantt_end}`,
         );
 
-        // Additional timeline extension
         this.gantt_start = date_utils.add(
             this.gantt_start,
             -5,
@@ -1171,6 +1167,11 @@ export default class Gantt {
             );
         }
 
+        console.log(
+            'task_update: All tasks:',
+            this.tasks.map((t) => ({ id: t.id, start: t._start, end: t._end })),
+        );
+
         const diff = date_utils.diff(
             this.config.custom_marker_date,
             this.gantt_start,
@@ -1183,6 +1184,8 @@ export default class Gantt {
             currentLeft,
             'custom_marker_date:',
             this.config.custom_marker_date,
+            'gantt_end:',
+            this.gantt_end,
         );
 
         const tasksWithBounds = this.tasks
@@ -1253,43 +1256,46 @@ export default class Gantt {
 
         entered_tasks.forEach((id) => {
             const task = this.get_task(id);
-            this.eventQueue.set(id, { task, state: 'enter' });
+            this.eventQueue.set(id + '_enter', { task, state: 'enter' });
         });
 
         exited_tasks.forEach((id) => {
             const task = this.get_task(id);
-            this.eventQueue.set(id, { task, state: 'exit' });
+            this.eventQueue.set(id + '_exit', { task, state: 'exit' });
         });
 
         this.overlapping_tasks = new_overlapping;
         console.log('task_update: eventQueue size:', this.eventQueue.size);
 
-        // Check if playback should continue
-        if (
-            (this.config.player_end_date &&
-                this.config.custom_marker_date >=
-                    this.config.player_end_date) ||
-            this.config.custom_marker_date >= this.gantt_end
-        ) {
+        const endDate = this.config.player_end_date || this.gantt_end;
+        if (this.config.custom_marker_date >= endDate) {
             console.log(
-                'task_update: Reached player_end_date or gantt_end, processing remaining tasks',
+                'task_update: Reached endDate, processing all tasks up to gantt_end',
             );
-            // Process all tasks that start before gantt_end
             const remainingTasks = this.tasks.filter(
                 (task) => task._start <= this.gantt_end,
             );
             remainingTasks.forEach((task) => {
                 if (
-                    !this.overlapping_tasks.has(task.id) &&
-                    task._start <= this.config.custom_marker_date
+                    task._start <= this.gantt_end &&
+                    !this.eventQueue.has(task.id + '_enter')
                 ) {
-                    this.eventQueue.set(task.id, { task, state: 'enter' });
+                    this.eventQueue.set(task.id + '_enter', {
+                        task,
+                        state: 'enter',
+                    });
                     console.log(
                         `task_update: Queued final bar_enter for task id=${task.id}`,
                     );
                 }
-                if (task._end <= this.config.custom_marker_date) {
-                    this.eventQueue.set(task.id, { task, state: 'exit' });
+                if (
+                    task._end <= this.gantt_end &&
+                    !this.eventQueue.has(task.id + '_exit')
+                ) {
+                    this.eventQueue.set(task.id + '_exit', {
+                        task,
+                        state: 'exit',
+                    });
                     console.log(
                         `task_update: Queued final bar_exit for task id=${task.id}`,
                     );
@@ -1340,6 +1346,7 @@ export default class Gantt {
                     );
                 if (node) {
                     this.shadingNodeCache.set(task.id, node);
+                    this.viewer.show(node);
                 }
             });
             console.log(
@@ -1449,8 +1456,54 @@ export default class Gantt {
     }
 
     flushViewerUpdates() {
-        this.debounceViewerUpdates();
-        this.lastViewerUpdate = performance.now();
+        if (!this.options.dataVizExtn || !this.options.viewer) {
+            console.warn('flushViewerUpdates: Missing dataVizExtn or viewer');
+            this.viewerUpdateQueue.clear();
+            return;
+        }
+
+        const updates = Array.from(this.viewerUpdateQueue.entries());
+        console.log(
+            'flushViewerUpdates: Processing updates:',
+            updates.map(([id, { task, state }]) => ({
+                id,
+                state,
+                task_name: task.name,
+            })),
+        );
+        if (!updates.length) return;
+
+        const shadingUpdates = new Map();
+        updates.forEach(([id, { task, state }]) => {
+            const value = state === 'enter' ? 0.6 : 0.3;
+            shadingUpdates.set(task.name, value);
+        });
+
+        shadingUpdates.forEach((value, taskName) => {
+            try {
+                this.options.dataVizExtn.renderSurfaceShading(
+                    taskName,
+                    'Progress',
+                    () => value,
+                );
+                console.log(
+                    `flushViewerUpdates: Applied shading=${value} for task=${taskName}`,
+                );
+            } catch (error) {
+                console.error(
+                    `flushViewerUpdates: Error applying shading for task=${taskName}:`,
+                    error,
+                );
+            }
+        });
+
+        this.viewerUpdateQueue.clear();
+        this.shadingNodeCache.clear();
+        console.log(
+            'flushViewerUpdates: Cleared viewerUpdateQueue and shadingNodeCache',
+        );
+
+        this.options.viewer.impl.sceneUpdated(true);
     }
 
     reset_play() {
@@ -2117,21 +2170,37 @@ export default class Gantt {
                 this.scrollAnimationFrame = null;
             }
 
-            // Process all tasks that start before gantt_end
+            console.log(
+                'handle_animation_end: Processing all tasks up to gantt_end',
+            );
             const remainingTasks = this.tasks.filter(
                 (task) => task._start <= this.gantt_end,
             );
             remainingTasks.forEach((task) => {
-                if (!this.overlapping_tasks.has(task.id)) {
-                    this.eventQueue.set(task.id, { task, state: 'enter' });
+                if (
+                    task._start <= this.gantt_end &&
+                    !this.eventQueue.has(task.id + '_enter')
+                ) {
+                    this.eventQueue.set(task.id + '_enter', {
+                        task,
+                        state: 'enter',
+                    });
                     console.log(
                         `handle_animation_end: Queued final bar_enter for task id=${task.id}`,
                     );
                 }
-                this.eventQueue.set(task.id, { task, state: 'exit' });
-                console.log(
-                    `handle_animation_end: Queued final bar_exit for task id=${task.id}`,
-                );
+                if (
+                    task._end <= this.gantt_end &&
+                    !this.eventQueue.has(task.id + '_exit')
+                ) {
+                    this.eventQueue.set(task.id + '_exit', {
+                        task,
+                        state: 'exit',
+                    });
+                    console.log(
+                        `handle_animation_end: Queued final bar_exit for task id=${task.id}`,
+                    );
+                }
             });
             this.overlapping_tasks.clear();
             this.flushEventQueue();
