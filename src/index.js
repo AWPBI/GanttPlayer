@@ -262,6 +262,30 @@ export default class Gantt {
         this.options.view_mode = mode.name;
         this.config.view_mode = mode;
         this.update_view_scale(mode);
+
+        // Recalculate custom_marker_date based on new view mode
+        const tasksStartDates = this.tasks.map((task) => task._start);
+        const minDate = tasksStartDates.length
+            ? tasksStartDates.reduce((min, date) => (date < min ? date : min))
+            : new Date();
+        const { duration, scale } = date_utils.parse_duration(
+            this.config.view_mode.step,
+        );
+        this.config.custom_marker_date = date_utils.add(
+            minDate,
+            -2 * duration,
+            scale,
+        );
+        this.options.custom_marker_init_date =
+            this.config.custom_marker_date.toISOString();
+
+        console.log('change_view_mode:', {
+            view_mode: mode.name,
+            minDate: minDate,
+            custom_marker_date: this.config.custom_marker_date,
+            gantt_start: this.gantt_start,
+        });
+
         this.setup_dates(maintain_pos);
         this.render();
         if (maintain_pos) {
@@ -292,63 +316,84 @@ export default class Gantt {
         this.setup_date_values();
     }
 
-    setup_gantt_dates(refresh) {
+    setup_gantt_dates(refresh = false) {
         let gantt_start, gantt_end;
         if (!this.tasks.length) {
             gantt_start = new Date();
             gantt_end = new Date();
+        } else {
+            gantt_start = this.tasks.reduce(
+                (min, task) => (task._start < min ? task._start : min),
+                this.tasks[0]._start,
+            );
+            gantt_end = this.tasks.reduce(
+                (max, task) => (task._end > max ? task._end : max),
+                this.tasks[0]._end,
+            );
         }
 
-        for (let task of this.tasks) {
-            if (!gantt_start || task._start < gantt_start) {
-                gantt_start = task._start;
-            }
-            if (!gantt_end || task._end > gantt_end) {
-                gantt_end = task._end;
-            }
-        }
+        // Ensure gantt_start is at least 2 increments before the earliest task
+        const { duration, scale } = date_utils.parse_duration(
+            this.config.view_mode.step,
+        );
+        const minStart = date_utils.add(gantt_start, -2 * duration, scale);
+        gantt_start = minStart < gantt_start ? minStart : gantt_start;
 
         gantt_start = date_utils.start_of(gantt_start, this.config.unit);
         gantt_end = date_utils.start_of(gantt_end, this.config.unit);
 
         if (!refresh) {
-            if (!this.options.infinite_padding) {
-                if (typeof this.config.view_mode.padding === 'string')
-                    this.config.view_mode.padding = [
-                        this.config.view_mode.padding,
-                        this.config.view_mode.padding,
-                    ];
+            this.gantt_start = gantt_start;
+            this.gantt_end = date_utils.add(gantt_end, 2 * duration, scale);
 
-                let [padding_start, padding_end] =
-                    this.config.view_mode.padding.map(
-                        date_utils.parse_duration,
-                    );
+            // Apply padding if specified
+            if (
+                !this.options.infinite_padding &&
+                this.config.view_mode.padding
+            ) {
+                let [padding_start, padding_end] = Array.isArray(
+                    this.config.view_mode.padding,
+                )
+                    ? this.config.view_mode.padding
+                    : [
+                          this.config.view_mode.padding,
+                          this.config.view_mode.padding,
+                      ];
+                padding_start = date_utils.parse_duration(padding_start);
+                padding_end = date_utils.parse_duration(padding_end);
                 this.gantt_start = date_utils.add(
-                    gantt_start,
+                    this.gantt_start,
                     -padding_start.duration,
                     padding_start.scale,
                 );
                 this.gantt_end = date_utils.add(
-                    gantt_end,
+                    this.gantt_end,
                     padding_end.duration,
                     padding_end.scale,
                 );
-            } else {
+            } else if (this.options.infinite_padding) {
                 this.gantt_start = date_utils.add(
-                    gantt_start,
+                    this.gantt_start,
                     -this.config.extend_by_units * 3,
                     this.config.unit,
                 );
                 this.gantt_end = date_utils.add(
-                    gantt_end,
+                    this.gantt_end,
                     this.config.extend_by_units * 3,
                     this.config.unit,
                 );
             }
         }
+
         this.config.date_format =
             this.config.view_mode.date_format || this.options.date_format;
         this.gantt_start.setHours(0, 0, 0, 0);
+
+        console.log('setup_gantt_dates:', {
+            gantt_start: this.gantt_start,
+            gantt_end: this.gantt_end,
+            view_mode: this.config.view_mode.name,
+        });
     }
 
     setup_date_values() {
@@ -868,7 +913,7 @@ export default class Gantt {
     play_animated_highlight(left, dateObj) {
         let adjustedLeft = left;
         let adjustedDateObj = dateObj;
-        if (!dateObj || isNaN(left) || left === 0) {
+        if (!dateObj || isNaN(left) || left < 0) {
             adjustedDateObj =
                 this.config.custom_marker_date || new Date(this.gantt_start);
             adjustedLeft =
@@ -880,6 +925,14 @@ export default class Gantt {
                     this.config.step) *
                 this.config.column_width;
         }
+
+        console.log('play_animated_highlight:', {
+            date: adjustedDateObj,
+            gantt_start: this.gantt_start,
+            unit: this.config.unit,
+            step: this.config.step,
+            left: adjustedLeft,
+        });
 
         // Calculate grid height dynamically
         let gridHeight = this.grid_height || 1152;
