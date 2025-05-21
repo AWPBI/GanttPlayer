@@ -102,55 +102,13 @@ export default class Gantt {
             this.options.player_state = false;
         }
 
-        // Determine view mode and offset unit
-        const view_mode = this.options.view_mode || 'Day';
-        let offsetUnit,
-            offsetAmount = -2; // Subtract 2 intervals
-        switch (view_mode.toLowerCase()) {
-            case 'hour':
-                offsetUnit = 'hour';
-                break;
-            case 'quarter_day':
-                offsetUnit = 'hour';
-                offsetAmount = -2 * 6;
-                break;
-            case 'half_day':
-                offsetUnit = 'hour';
-                offsetAmount = -2 * 12;
-                break;
-            case 'day':
-                offsetUnit = 'day';
-                break;
-            case 'week':
-                offsetUnit = 'week';
-                break;
-            case 'month':
-                offsetUnit = 'month';
-                break;
-            case 'year':
-                offsetUnit = 'year';
-                break;
-            default:
-                offsetUnit = 'day';
-        }
-
         if (this.options.custom_marker) {
             const baseDate = this.options.custom_marker_init_date
                 ? new Date(this.options.custom_marker_init_date)
                 : new Date(this.tasks[0]?._start || Date.now());
-            let newDate = new Date(baseDate);
-            if (offsetUnit === 'week') {
-                newDate.setDate(baseDate.getDate() + offsetAmount * 7);
-            } else if (offsetUnit === 'month') {
-                newDate.setMonth(baseDate.getMonth() + offsetAmount);
-            } else if (offsetUnit === 'year') {
-                newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
-            } else {
-                newDate = date_utils.add(baseDate, offsetAmount, offsetUnit);
-            }
-            this.config.custom_marker_date = newDate;
+            this.config.custom_marker_date = new Date(baseDate);
             console.log(
-                `setup_options: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
+                `setup_options: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
             );
         }
 
@@ -1087,53 +1045,12 @@ export default class Gantt {
     }
 
     reset_play() {
-        // Recompute custom_marker_date with offset
-        const view_mode = this.options.view_mode || 'Day';
-        let offsetUnit,
-            offsetAmount = -2;
-        switch (view_mode.toLowerCase()) {
-            case 'hour':
-                offsetUnit = 'hour';
-                break;
-            case 'quarter_day':
-                offsetUnit = 'hour';
-                offsetAmount = -2 * 6;
-                break;
-            case 'half_day':
-                offsetUnit = 'hour';
-                offsetAmount = -2 * 12;
-                break;
-            case 'day':
-                offsetUnit = 'day';
-                break;
-            case 'week':
-                offsetUnit = 'week';
-                break;
-            case 'month':
-                offsetUnit = 'month';
-                break;
-            case 'year':
-                offsetUnit = 'year';
-                break;
-            default:
-                offsetUnit = 'day';
-        }
         const baseDate = this.options.custom_marker_init_date
             ? new Date(this.options.custom_marker_init_date)
             : new Date(this.tasks[0]?._start || Date.now());
-        let newDate = new Date(baseDate);
-        if (offsetUnit === 'week') {
-            newDate.setDate(baseDate.getDate() + offsetAmount * 7);
-        } else if (offsetUnit === 'month') {
-            newDate.setMonth(baseDate.getMonth() + offsetAmount);
-        } else if (offsetUnit === 'year') {
-            newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
-        } else {
-            newDate = date_utils.add(baseDate, offsetAmount, offsetUnit);
-        }
-        this.config.custom_marker_date = newDate;
+        this.config.custom_marker_date = new Date(baseDate);
         console.log(
-            `reset_play: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
+            `reset_play: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
         );
 
         this.options.player_state = false;
@@ -1511,11 +1428,13 @@ export default class Gantt {
             return;
         }
 
-        if (
-            this.config.player_end_date &&
-            this.config.custom_marker_date >= this.config.player_end_date
-        ) {
-            console.log('player_update: reached player_end_date, stopping');
+        const latestTaskEnd = this.tasks.reduce(
+            (latest, task) => (task._end > latest ? task._end : latest),
+            this.tasks[0]._end,
+        );
+
+        if (this.config.custom_marker_date > latestTaskEnd) {
+            console.log('player_update: passed latest task end, stopping');
             this.handle_animation_end();
             return;
         }
@@ -1731,10 +1650,12 @@ export default class Gantt {
             const res = this.get_closest_date_to(
                 this.config.custom_marker_date,
             );
+            const latestTaskEnd = this.tasks.reduce(
+                (latest, task) => (task._end > latest ? task._end : latest),
+                this.tasks[0]._end,
+            );
             const isBeyondEnd =
-                res && this.config.player_end_date
-                    ? res[0] >= this.config.player_end_date
-                    : false;
+                res && this.config.custom_marker_date > latestTaskEnd;
 
             if (progress < 1 && !isBeyondEnd) {
                 this.scrollAnimationFrame =
@@ -1798,56 +1719,12 @@ export default class Gantt {
             this.eventQueue.clear();
 
             if (this.options.player_loop) {
-                const view_mode = this.options.view_mode || 'Day';
-                let offsetUnit,
-                    offsetAmount = -2;
-                switch (view_mode.toLowerCase()) {
-                    case 'hour':
-                        offsetUnit = 'hour';
-                        break;
-                    case 'quarter_day':
-                        offsetUnit = 'hour';
-                        offsetAmount = -2 * 6;
-                        break;
-                    case 'half_day':
-                        offsetUnit = 'hour';
-                        offsetAmount = -2 * 12;
-                        break;
-                    case 'day':
-                        offsetUnit = 'day';
-                        break;
-                    case 'week':
-                        offsetUnit = 'week';
-                        break;
-                    case 'month':
-                        offsetUnit = 'month';
-                        break;
-                    case 'year':
-                        offsetUnit = 'year';
-                        break;
-                    default:
-                        offsetUnit = 'day';
-                }
                 const baseDate = this.options.custom_marker_init_date
                     ? new Date(this.options.custom_marker_init_date)
                     : new Date(this.tasks[0]?._start || Date.now());
-                let newDate = new Date(baseDate);
-                if (offsetUnit === 'week') {
-                    newDate.setDate(baseDate.getDate() + offsetAmount * 7);
-                } else if (offsetUnit === 'month') {
-                    newDate.setMonth(baseDate.getMonth() + offsetAmount);
-                } else if (offsetUnit === 'year') {
-                    newDate.setFullYear(baseDate.getFullYear() + offsetAmount);
-                } else {
-                    newDate = date_utils.add(
-                        baseDate,
-                        offsetAmount,
-                        offsetUnit,
-                    );
-                }
-                this.config.custom_marker_date = newDate;
+                this.config.custom_marker_date = new Date(baseDate);
                 console.log(
-                    `handle_animation_end: view_mode=${view_mode}, baseDate=${baseDate}, offset=${offsetAmount} ${offsetUnit}, custom_marker_date=${this.config.custom_marker_date}`,
+                    `handle_animation_end: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
                 );
 
                 this.overlapping_tasks.clear();
@@ -2351,183 +2228,112 @@ export default class Gantt {
             }
 
             $bar_progress.setAttribute('width', $bar_progress.owidth + dx);
-            $.attr(
-                bar.$handle_progression,
-                $.attr(bar.$handle_progress, 'cx', $bar_progress.getEndX()),
-            );
-
             $bar_progress.finaldx = dx;
+
+            if (dx === 0) return;
+
+            let progress = Math.round(
+                ($bar_progress.getWidth() / $bar.getWidth()) * 100,
+            );
+            bar.task.progress = progress;
+            if (progress >= 100) {
+                bar.$bar.classList.add('done');
+                bar.task.done = true;
+            } else {
+                bar.$bar.classList.remove('done');
+                bar.task.done = false;
+            }
         });
 
         $.on(this.$svg, 'mouseup', () => {
-            is_resizing = false;
-            if (!($bar_progress && $bar_progress.finaldx)) return;
+            is_resizing = null;
+            if (!bar || !$bar_progress.finaldx) return;
 
-            $bar_progress.finaldx = 0;
-            bar.progress_changed();
+            bar.date_changed();
+            bar.compute_progress();
             bar.set_action_completed();
-            bar = null;
-            $bar_progress = null;
-            $bar = null;
+            this.hide_popup();
         });
     }
 
     get_all_dependent_tasks(task_id) {
-        let out = [];
-        let to_process = [task_id];
-        while (to_process.length) {
-            const deps = to_process.reduce((acc, curr) => {
-                acc = acc.concat(this.dependency_map[curr]);
-                return acc;
-            }, []);
+        let tasks = [];
+        let seen = new Set();
 
-            out = out.concat(deps);
-            to_process = deps.filter((d) => !to_process.includes(d));
-        }
+        const collect_deps = (id) => {
+            if (seen.has(id)) return;
+            seen.add(id);
+            const deps = this.dependency_map[id] || [];
+            tasks.push(...deps);
+            deps.forEach(collect_deps);
+        };
 
-        return out.filter(Boolean);
+        collect_deps(task_id);
+        return tasks;
     }
 
     get_snap_position(dx, ox) {
-        let unit_length = 1;
-        const default_snap =
-            this.options.snap_at || this.config.view_mode.snap_at || '1d';
-
-        if (default_snap !== 'unit') {
-            const { duration, scale } = date_utils.parse_duration(default_snap);
-            unit_length =
-                date_utils.convert_scales(this.config.view_mode.step, scale) /
-                duration;
-        }
-
-        const rem = dx % (this.config.column_width / unit_length);
-
-        let final_dx =
-            dx -
-            rem +
-            (rem < (this.config.column_width / unit_length) * 2
-                ? 0
-                : this.config.column_width / unit_length);
-        let final_pos = ox + final_dx;
-
-        const drn = final_dx > 0 ? 1 : -1;
-        let ignored_regions = this.get_ignored_region(final_pos, drn);
-        while (ignored_regions.length) {
-            final_pos += this.config.column_width * drn;
-            ignored_regions = this.get_ignored_region(final_pos, drn);
-            if (!ignored_regions.length)
-                final_pos -= this.config.column_width * drn;
-        }
-        return final_pos - ox;
-    }
-
-    get_ignored_region(pos, drn = 1) {
-        if (drn === 1) {
-            return this.config.ignored_positions.filter((val) => {
-                return pos > val && pos <= val + this.config.column_width;
-            });
-        } else {
-            return this.config.ignored_positions.filter(
-                (val) => pos >= val && pos < val + this.config.column_width,
-            );
-        }
+        let snap_pos = ox + dx;
+        let snap_pos_in_units = snap_pos / this.config.column_width;
+        snap_pos_in_units = Math.round(snap_pos_in_units * this.config.step);
+        return (
+            (snap_pos_in_units / this.config.step) * this.config.column_width
+        );
     }
 
     unselect_all() {
-        if (this.popup) this.popup.parent.classList.add('hide');
-        this.$container
-            .querySelectorAll('.date-range-highlight')
-            .forEach((k) => k.classList.add('hide'));
+        this.$svg
+            .querySelectorAll('.bar-wrapper')
+            .forEach((el) => el.classList.remove('active'));
     }
 
     view_is(modes) {
         if (typeof modes === 'string') {
-            return this.config.view_mode.name === modes;
+            return this.options.view_mode.toLowerCase() === modes.toLowerCase();
         }
-
-        if (Array.isArray(modes)) {
-            return modes.some(view_is);
-        }
-
-        return this.config.view_mode.name === modes.name;
+        return modes
+            .map((m) => m.toLowerCase())
+            .includes(this.options.view_mode.toLowerCase());
     }
 
     get_task(id) {
-        return this.tasks.find((task) => {
-            return task.id === id;
-        });
+        return this.tasks.find((task) => task.id === id);
     }
 
     get_bar(id) {
-        return this.bars.find((bar) => {
-            return bar.task.id === id;
-        });
+        return this.bars.find((bar) => bar.task.id === id);
     }
 
-    show_popup(opts) {
-        if (this.options.popup === false) return;
+    show_popup(args) {
         if (!this.popup) {
-            this.popup = new Popup(
-                this.$popup_wrapper,
-                this.options.popup,
-                this,
-            );
+            this.popup = new Popup(this.$popup_wrapper, this.options);
         }
-        this.popup.show(opts);
+        this.popup.show(args);
     }
 
     hide_popup() {
-        this.popup && this.popup.hide();
+        if (this.popup) this.popup.hide();
     }
 
     trigger_event(event, args) {
         if (this.options['on_' + event]) {
-            this.options['on_' + event].apply(this, args);
+            this.options['on_' + event].apply(null, args);
         }
-    }
-
-    get_oldest_starting_date() {
-        if (!this.tasks.length) return new Date();
-        return this.tasks
-            .map((task) => task._start)
-            .reduce((prev_date, cur_date) =>
-                cur_date <= prev_date ? cur_date : prev_date,
-            );
     }
 
     clear() {
         this.$svg.innerHTML = '';
-        this.$header?.remove?.();
-        this.$side_header?.remove?.();
-        this.$current_highlight?.remove?.();
-        this.$current_ball_highlight?.remove?.();
-        this.$extras?.remove?.();
-        this.popup?.hide?.();
-        if (this.$animated_highlight) {
-            this.$animated_highlight.remove();
-            this.$animated_highlight = null;
-        }
-        if (this.$animated_ball_highlight) {
-            this.$animated_ball_highlight.remove();
-            this.$animated_ball_highlight = null;
-        }
+        this.$header?.remove();
+        this.$extras?.remove();
+        this.upperTexts = [];
     }
 }
-
-Gantt.VIEW_MODE = {
-    HOUR: DEFAULT_VIEW_MODES[0],
-    QUARTER_DAY: DEFAULT_VIEW_MODES[1],
-    HALF_DAY: DEFAULT_VIEW_MODES[2],
-    DAY: DEFAULT_VIEW_MODES[3],
-    WEEK: DEFAULT_VIEW_MODES[4],
-    MONTH: DEFAULT_VIEW_MODES[5],
-    YEAR: DEFAULT_VIEW_MODES[6],
-};
 
 function generate_id(task) {
     return task.name + '_' + Math.random().toString(36).slice(2, 12);
 }
 
-function sanitize(s) {
-    return s.replaceAll(' ', '_').replaceAll(':', '_').replaceAll('.', '_');
+function sanitize(str) {
+    if (!str) return str;
+    return str.replaceAll(' ', '_').replaceAll('/', '-');
 }
