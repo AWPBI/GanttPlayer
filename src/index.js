@@ -103,7 +103,7 @@ export default class Gantt {
         }
 
         if (this.options.custom_marker) {
-            const baseDate = this.options.custom_marker_init_date
+            let baseDate = this.options.custom_marker_init_date
                 ? new Date(this.options.custom_marker_init_date)
                 : this.tasks[0]?._start
                   ? new Date(this.tasks[0]._start)
@@ -112,11 +112,22 @@ export default class Gantt {
                 console.warn(
                     `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
                 );
-                this.config.custom_marker_date = this.tasks[0]?._start
+                baseDate = this.tasks[0]?._start
                     ? new Date(this.tasks[0]._start)
                     : new Date();
-            } else {
-                this.config.custom_marker_date = new Date(baseDate);
+            }
+            // Set custom_marker_date to 2 intervals before baseDate
+            this.config.custom_marker_date = date_utils.add(
+                baseDate,
+                -2,
+                this.config.unit || 'day',
+            );
+            // Clamp to gantt_start if defined
+            if (
+                this.gantt_start &&
+                this.config.custom_marker_date < this.gantt_start
+            ) {
+                this.config.custom_marker_date = new Date(this.gantt_start);
             }
             console.log(
                 `setup_options: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
@@ -1092,7 +1103,7 @@ export default class Gantt {
     }
 
     reset_play() {
-        const baseDate = this.options.custom_marker_init_date
+        let baseDate = this.options.custom_marker_init_date
             ? new Date(this.options.custom_marker_init_date)
             : this.tasks[0]?._start
               ? new Date(this.tasks[0]._start)
@@ -1101,11 +1112,22 @@ export default class Gantt {
             console.warn(
                 `Invalid custom_marker_init_date, using task start or current date: ${baseDate}`,
             );
-            this.config.custom_marker_date = this.tasks[0]?._start
+            baseDate = this.tasks[0]?._start
                 ? new Date(this.tasks[0]._start)
                 : new Date();
-        } else {
-            this.config.custom_marker_date = new Date(baseDate);
+        }
+        // Set custom_marker_date to 2 intervals before baseDate
+        this.config.custom_marker_date = date_utils.add(
+            baseDate,
+            -2,
+            this.config.unit || 'day',
+        );
+        // Clamp to gantt_start
+        if (
+            this.gantt_start &&
+            this.config.custom_marker_date < this.gantt_start
+        ) {
+            this.config.custom_marker_date = new Date(this.gantt_start);
         }
         console.log(
             `reset_play: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
@@ -1790,7 +1812,19 @@ export default class Gantt {
                         ? new Date(this.tasks[0]._start)
                         : new Date();
                 } else {
-                    this.config.custom_marker_date = new Date(baseDate);
+                    this.config.custom_marker_date = date_utils.add(
+                        baseDate,
+                        -2,
+                        this.config.unit || 'day',
+                    );
+                    if (
+                        this.gantt_start &&
+                        this.config.custom_marker_date < this.gantt_start
+                    ) {
+                        this.config.custom_marker_date = new Date(
+                            this.gantt_start,
+                        );
+                    }
                 }
                 console.log(
                     `handle_animation_end: view_mode=${this.options.view_mode}, baseDate=${baseDate}, custom_marker_date=${this.config.custom_marker_date}`,
