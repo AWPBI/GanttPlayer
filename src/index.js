@@ -11,7 +11,7 @@ import TaskManager from './taskManager';
 import EventBinder from './eventBinder';
 import PopupManager from './popupManager';
 import './styles/gantt.css';
-import { generate_id, sanitize } from './utils'; // Assuming utility functions are in a separate file
+import { generate_id, sanitize } from './utils';
 
 export default class Gantt {
     constructor(wrapper, tasks, options) {
@@ -33,6 +33,7 @@ export default class Gantt {
                 ? date_utils.parse(this.options.player_end_date)
                 : null,
             view_mode: this.options.view_mode,
+            extend_by_units: 10, // Added from unsplit version
         };
 
         this.setupWrapper(wrapper);
@@ -160,31 +161,66 @@ export default class Gantt {
         );
     }
 
-    setupDates() {
+    setupDates(refresh = false) {
         const tasks = this.taskManager.tasks;
         let gantt_start, gantt_end;
 
-        if (tasks.length) {
-            gantt_start = tasks.reduce(
-                (min, t) => (t._start < min ? t._start : min),
-                tasks[0]._start,
-            );
-            gantt_end = tasks.reduce(
-                (max, t) => (t._end > max ? t._end : max),
-                tasks[0]._end,
-            );
-        } else {
-            // Fallback for empty task list
+        if (!tasks.length) {
             console.warn('No valid tasks; using current date as fallback');
             gantt_start = new Date();
-            gantt_end = date_utils.add(gantt_start, 1, 'day');
+            gantt_end = new Date();
+        } else {
+            for (let task of tasks) {
+                if (!gantt_start || task._start < gantt_start) {
+                    gantt_start = task._start;
+                }
+                if (!gantt_end || task._end > gantt_end) {
+                    gantt_end = task._end;
+                }
+            }
         }
 
         gantt_start = date_utils.start_of(gantt_start, this.config.unit);
         gantt_end = date_utils.start_of(gantt_end, this.config.unit);
 
-        this.gantt_start = date_utils.add(gantt_start, -1, this.config.unit);
-        this.gantt_end = date_utils.add(gantt_end, 1, this.config.unit);
+        if (!refresh) {
+            if (!this.options.infinite_padding) {
+                let [padding_start, padding_end] = this.config.view_mode.padding
+                    ? this.config.view_mode.padding.map(
+                          date_utils.parse_duration,
+                      )
+                    : [
+                          { duration: 1, scale: this.config.unit },
+                          { duration: 1, scale: this.config.unit },
+                      ];
+                this.gantt_start = date_utils.add(
+                    gantt_start,
+                    -padding_start.duration,
+                    padding_start.scale,
+                );
+                this.gantt_end = date_utils.add(
+                    gantt_end,
+                    padding_end.duration,
+                    padding_end.scale,
+                );
+            } else {
+                this.gantt_start = date_utils.add(
+                    gantt_start,
+                    -this.config.extend_by_units * 3,
+                    this.config.unit,
+                );
+                this.gantt_end = date_utils.add(
+                    gantt_end,
+                    this.config.extend_by_units * 3,
+                    this.config.unit,
+                );
+            }
+        } else {
+            this.gantt_start = gantt_start;
+            this.gantt_end = gantt_end;
+        }
+
+        this.gantt_start.setHours(0, 0, 0, 0); // Align with unsplit version
 
         this.dates = [this.gantt_start];
         let curDate = this.gantt_start;
