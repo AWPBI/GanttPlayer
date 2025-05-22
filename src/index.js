@@ -11,8 +11,8 @@ export default class Gantt {
     constructor(wrapper, tasks, options) {
         this.setup_wrapper(wrapper);
         this.setup_options(options);
+        this.eventQueueManager = new EventQueueManager(this); // Moved earlier
         this.setup_tasks(tasks);
-        this.eventQueueManager = new EventQueueManager(this);
         this.change_view_mode();
         this.bind_events();
         this.scrollAnimationFrame = null;
@@ -1377,7 +1377,9 @@ export default class Gantt {
                     (this.options.bar_height + this.options.padding);
         }
 
-        this.eventQueueManager.lastTaskY = taskY;
+        if (this.eventQueueManager) {
+            this.eventQueueManager.lastTaskY = taskY;
+        }
 
         const adjustedY = taskY - this.config.header_height;
 
@@ -1468,8 +1470,13 @@ export default class Gantt {
                                     this.options.padding);
                     }
 
-                    this.eventQueueManager.lastTaskY = taskY;
-                } else if (this.eventQueueManager.lastTaskY !== null) {
+                    if (this.eventQueueManager) {
+                        this.eventQueueManager.lastTaskY = taskY;
+                    }
+                } else if (
+                    this.eventQueueManager &&
+                    this.eventQueueManager.lastTaskY !== null
+                ) {
                     taskY = this.eventQueueManager.lastTaskY;
                 } else {
                     const targetTask = this.tasks.reduce(
@@ -1499,7 +1506,9 @@ export default class Gantt {
                                     this.options.padding);
                     }
 
-                    this.eventQueueManager.lastTaskY = taskY;
+                    if (this.eventQueueManager) {
+                        this.eventQueueManager.lastTaskY = taskY;
+                    }
                 }
 
                 const adjustedY = taskY - this.config.header_height;
