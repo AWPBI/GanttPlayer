@@ -16,23 +16,45 @@ import { generate_id, sanitize } from './utils';
 export default class Gantt {
     constructor(wrapper, tasks, options) {
         this.options = { ...DEFAULT_OPTIONS, ...options };
+        // Ensure view_modes is an array
+        this.options.view_modes = Array.isArray(this.options.view_modes)
+            ? this.options.view_modes
+            : DEFAULT_VIEW_MODES;
+        // Ensure view_mode is a valid object
+        if (typeof this.options.view_mode === 'string') {
+            this.options.view_mode =
+                this.options.view_modes.find(
+                    (m) => m.name === this.options.view_mode,
+                ) || DEFAULT_VIEW_MODES.find((m) => m.name === 'DAY');
+        } else if (
+            !this.options.view_mode ||
+            typeof this.options.view_mode !== 'object'
+        ) {
+            this.options.view_mode = DEFAULT_VIEW_MODES.find(
+                (m) => m.name === 'DAY',
+            );
+        }
+
+        // Config for computed values, keeping column_width for Bar compatibility
         this.config = {
             step: 1,
             unit: 'day',
-            column_width: this.options.column_width || 45,
+            column_width:
+                this.options.column_width ||
+                this.options.view_mode.column_width ||
+                45,
             header_height:
                 this.options.lower_header_height +
                 this.options.upper_header_height +
                 10,
             ignored_dates: [],
             ignored_positions: [],
-            custom_marker_date: new Date(
-                this.options.custom_marker_init_date || Date.now(),
-            ),
+            custom_marker_date: this.options.custom_marker_init_date
+                ? date_utils.parse(this.options.custom_marker_init_date)
+                : new Date(),
             player_end_date: this.options.player_end_date
                 ? date_utils.parse(this.options.player_end_date)
                 : null,
-            view_mode: this.options.view_mode,
             extend_by_units: 10,
         };
 
@@ -48,7 +70,7 @@ export default class Gantt {
         this.layers = {};
         this.dates = [];
         this.arrows = [];
-        this.setupDates(); // Explicitly call setupDates before rendering
+        this.setupDates();
         this.changeViewMode();
         this.eventBinder.bindEvents();
         this.animationManager.initialize();
@@ -134,27 +156,34 @@ export default class Gantt {
 
     changeViewMode(mode = this.options.view_mode, maintainPos = false) {
         const oldScroll = maintainPos ? this.$container.scrollLeft : null;
-        this.config.view_mode =
-            typeof mode === 'string'
-                ? this.options.view_modes.find((m) => m.name === mode)
-                : mode;
-        this.options.view_mode = this.config.view_mode.name;
+        let viewMode;
+        if (typeof mode === 'string') {
+            viewMode =
+                this.options.view_modes.find((m) => m.name === mode) ||
+                DEFAULT_VIEW_MODES.find((m) => m.name === 'DAY');
+        } else {
+            viewMode =
+                mode && typeof mode === 'object'
+                    ? mode
+                    : DEFAULT_VIEW_MODES.find((m) => m.name === 'DAY');
+        }
+        this.options.view_mode = viewMode;
         this.updateViewScale();
         this.setupDates();
         this.render();
         if (maintainPos) this.$container.scrollLeft = oldScroll;
-        this.triggerEvent('view_change', [this.config.view_mode]);
+        this.triggerEvent('view_change', [this.options.view_mode]);
     }
 
     updateViewScale() {
         const { duration, scale } = date_utils.parse_duration(
-            this.config.view_mode.step,
+            this.options.view_mode.step,
         );
         this.config.step = duration;
         this.config.unit = scale;
         this.config.column_width =
             this.options.column_width ||
-            this.config.view_mode.column_width ||
+            this.options.view_mode.column_width ||
             45;
         this.$container.style.setProperty(
             '--gv-column-width',
@@ -186,14 +215,12 @@ export default class Gantt {
 
         if (!refresh) {
             if (!this.options.infinite_padding) {
-                let [padding_start, padding_end] = this.config.view_mode.padding
-                    ? this.config.view_mode.padding.map(
-                          date_utils.parse_duration,
-                      )
-                    : [
-                          { duration: 1, scale: this.config.unit },
-                          { duration: 1, scale: this.config.unit },
-                      ];
+                const padding = Array.isArray(this.options.view_mode.padding)
+                    ? this.options.view_mode.padding
+                    : ['1 day', '1 day'];
+                let [padding_start, padding_end] = padding.map(
+                    date_utils.parse_duration,
+                );
                 this.gantt_start = date_utils.add(
                     gantt_start,
                     -padding_start.duration,
@@ -239,7 +266,7 @@ export default class Gantt {
         this.clear();
         this.setupLayers();
         this.gridRenderer.renderGrid();
-        this.taskManager.makeBars(); // Moved from setupTasks to ensure gantt_start is set
+        this.taskManager.makeBars();
         this.makeArrows();
         this.setDimensions();
         this.animationManager.playAnimatedHighlight();
@@ -340,25 +367,25 @@ export default class Gantt {
     getDateInfo(date, lastDateInfo) {
         const x = lastDateInfo ? lastDateInfo.x + lastDateInfo.column_width : 0;
         const upperText =
-            typeof this.config.view_mode.upper_text === 'string'
+            typeof this.options.view_mode.upper_text === 'string'
                 ? date_utils.format(
                       date,
-                      this.config.view_mode.upper_text,
+                      this.options.view_mode.upper_text,
                       this.options.language,
                   )
-                : this.config.view_mode.upper_text?.(
+                : this.options.view_mode.upper_text?.(
                       date,
                       lastDateInfo?.date,
                       this.options.language,
                   ) || '';
         const lowerText =
-            typeof this.config.view_mode.lower_text === 'string'
+            typeof this.options.view_mode.lower_text === 'string'
                 ? date_utils.format(
                       date,
-                      this.config.view_mode.lower_text,
+                      this.options.view_mode.lower_text,
                       this.options.language,
                   )
-                : this.config.view_mode.lower_text?.(
+                : this.options.view_mode.lower_text?.(
                       date,
                       lastDateInfo?.date,
                       this.options.language,
@@ -369,7 +396,7 @@ export default class Gantt {
             formatted_date: sanitize(
                 date_utils.format(
                     date,
-                    this.config.view_mode.date_format ||
+                    this.options.view_mode.date_format ||
                         this.options.date_format,
                     this.options.language,
                 ),
@@ -415,10 +442,10 @@ export default class Gantt {
 
     viewIs(modes) {
         if (typeof modes === 'string')
-            return this.config.view_mode.name === modes;
+            return this.options.view_mode.name === modes;
         return Array.isArray(modes)
-            ? modes.includes(this.config.view_mode.name)
-            : this.config.view_mode.name === modes.name;
+            ? modes.includes(this.options.view_mode.name)
+            : this.options.view_mode.name === modes.name;
     }
 
     triggerEvent(event, args) {
@@ -450,6 +477,12 @@ export default class Gantt {
 
     create_el(options) {
         return this.createElement(options);
+    }
+
+    update_options(newOptions) {
+        this.options = { ...this.options, ...newOptions };
+        this.setupOptions();
+        this.changeViewMode();
     }
 }
 
