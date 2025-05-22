@@ -24,13 +24,16 @@ export default class Gantt {
     }
 
     // New method to process the event queue sequentially
-    async processEventQueue() {
-        if (this.isProcessingQueue) return;
+    async processEventQueue(force = false) {
+        if (this.isProcessingQueue && !force) return;
         this.isProcessingQueue = true;
+
+        console.log('Processing eventQueue:', this.eventQueue);
 
         while (this.eventQueue.length > 0) {
             const { event, task } = this.eventQueue[0];
             try {
+                console.log(`Executing ${event} for task ${task.id}`);
                 await this.options['on_' + event](task);
             } catch (error) {
                 console.error(
@@ -38,7 +41,7 @@ export default class Gantt {
                     error,
                 );
             }
-            this.eventQueue.shift(); // Remove the processed event
+            this.eventQueue.shift();
         }
 
         this.isProcessingQueue = false;
@@ -1191,22 +1194,45 @@ export default class Gantt {
             this.config.custom_marker_date =
                 this.options.custom_marker_init_date || new Date();
         }
+        console.log(
+            'toggle_play: custom_marker_date=',
+            this.config.custom_marker_date,
+        );
+
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
-            // Immediately check for tasks overlapping the initial custom_marker_date
+            // Immediately check for overlapping tasks
             if (this.options.custom_marker) {
-                const current_date = this.config.custom_marker_date;
-                const initial_overlapping = this.tasks.filter(
-                    (task) =>
-                        task._start <= current_date && current_date < task._end,
+                const current_date = new Date(this.config.custom_marker_date);
+                console.log('Checking overlaps at:', current_date);
+                console.log('Tasks:', this.tasks.length);
+
+                const initial_overlapping = this.tasks.filter((task) => {
+                    const isOverlapping =
+                        task._start <= current_date && current_date < task._end;
+                    console.log(
+                        `Task ${task.id}: start=${task._start}, end=${task._end}, overlapping=${isOverlapping}`,
+                    );
+                    return isOverlapping;
+                });
+
+                console.log(
+                    'Initial overlapping tasks:',
+                    initial_overlapping.length,
                 );
                 initial_overlapping.forEach((task) => {
+                    console.log(`Queuing bar_enter for task ${task.id}`);
                     this.eventQueue.push({ event: 'bar_enter', task });
                 });
+
                 this.overlapping_tasks = new Set(
                     initial_overlapping.map((task) => task.id),
                 );
-                this.processEventQueue();
+                console.log('overlapping_tasks:', [...this.overlapping_tasks]);
+                console.log('eventQueue before process:', this.eventQueue);
+
+                // Force process the queue immediately
+                this.processEventQueue(true); // Force processing
             }
 
             // Start the player interval
@@ -1260,10 +1286,15 @@ export default class Gantt {
         this.config.custom_marker_date = new Date(
             this.options.custom_marker_init_date || this.gantt_start,
         );
+        console.log(
+            'reset_play: custom_marker_date=',
+            this.config.custom_marker_date,
+        );
+
         this.options.player_state = false;
         this.overlapping_tasks.clear();
         this.lastTaskY = null;
-        this.eventQueue = []; // Clear the queue
+        this.eventQueue = [];
         clearInterval(this.player_interval);
         this.player_interval = null;
         if (this.scrollAnimationFrame) {
@@ -1287,20 +1318,38 @@ export default class Gantt {
         const left = (diff / this.config.step) * this.config.column_width;
         this.play_animated_highlight(left, this.config.custom_marker_date);
 
-        // Immediately check for tasks overlapping the reset custom_marker_date
+        // Immediately check for overlapping tasks
         if (this.options.custom_marker) {
-            const current_date = this.config.custom_marker_date;
-            const initial_overlapping = this.tasks.filter(
-                (task) =>
-                    task._start <= current_date && current_date < task._end,
+            const current_date = new Date(this.config.custom_marker_date);
+            console.log('Checking overlaps at:', current_date);
+            console.log('Tasks:', this.tasks.length);
+
+            const initial_overlapping = this.tasks.filter((task) => {
+                const isOverlapping =
+                    task._start <= current_date && current_date < task._end;
+                console.log(
+                    `Task ${task.id}: start=${task._start}, end=${task._end}, overlapping=${isOverlapping}`,
+                );
+                return isOverlapping;
+            });
+
+            console.log(
+                'Initial overlapping tasks:',
+                initial_overlapping.length,
             );
             initial_overlapping.forEach((task) => {
+                console.log(`Queuing bar_enter for task ${task.id}`);
                 this.eventQueue.push({ event: 'bar_enter', task });
             });
+
             this.overlapping_tasks = new Set(
                 initial_overlapping.map((task) => task.id),
             );
-            this.processEventQueue();
+            console.log('overlapping_tasks:', [...this.overlapping_tasks]);
+            console.log('eventQueue before process:', this.eventQueue);
+
+            // Force process the queue immediately
+            this.processEventQueue(true); // Force processing
         }
 
         this.trigger_event('reset', []);
