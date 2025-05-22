@@ -444,4 +444,12 @@ export default class GanttRenderer {
             this.gantt.arrows = this.gantt.arrows.concat(arrows);
         }
     }
+
+    generate_id(task) {
+        return task.name + '_' + Math.random().toString(36).slice(2, 12);
+    }
+
+    sanitize(s) {
+        return s.replaceAll(' ', '_').replaceAll(':', '_').replaceAll('.', '_');
+    }
 }
