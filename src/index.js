@@ -15,23 +15,22 @@ export default class Gantt {
         this.setup_options(options);
         this.setup_tasks(tasks);
         this.overlapping_tasks = new Set();
-        this.lastTaskY = null; // Track last known y position
-        this.eventQueue = []; // Queue for bar_enter and bar_exit events
-        this.isProcessingQueue = false; // Flag to prevent concurrent queue processing
+        this.lastTaskY = null;
+        this.eventQueue = [];
+        this.isProcessingQueue = false;
         this.change_view_mode();
         this.bind_events();
-        this.scrollAnimationFrame = null; // Track animation frame
+        this.scrollAnimationFrame = null;
     }
 
-    // New method to process the event queue sequentially
     async processEventQueue(force = false) {
         if (this.isProcessingQueue && !force) return;
         this.isProcessingQueue = true;
 
         console.log('Processing eventQueue:', this.eventQueue);
 
-        const queue = [...this.eventQueue]; // Copy queue to avoid mutation issues
-        this.eventQueue = []; // Clear queue immediately
+        const queue = [...this.eventQueue];
+        this.eventQueue = [];
 
         for (const { event, task } of queue) {
             try {
@@ -48,14 +47,11 @@ export default class Gantt {
         this.isProcessingQueue = false;
     }
 
-    // Modified to queue events instead of triggering immediately
     player_update() {
         if (!this.options.player_state) {
             console.log('player_update exited: player_state is false');
             return;
         }
-
-        // Ensure player_end_date is a Date object
         const player_end_date = this.config.player_end_date
             ? date_utils.parse(this.config.player_end_date, 'YYYY-MM-DD')
             : null;
@@ -209,7 +205,7 @@ export default class Gantt {
         this.processEventQueue();
     }
 
-    // Modified to ensure queue is processed before looping or stopping
+    // Ensure queue is processed before looping or stopping
     async handle_animation_end() {
         try {
             // Wait for the event queue to be fully processed
@@ -230,7 +226,7 @@ export default class Gantt {
                 );
                 this.overlapping_tasks.clear();
                 this.lastTaskY = null;
-                this.eventQueue = []; // Clear the queue
+                this.eventQueue = [];
                 this.render();
                 this.reset_play();
                 this.toggle_play();
@@ -238,7 +234,7 @@ export default class Gantt {
                 this.options.player_state = false;
                 this.overlapping_tasks.clear();
                 this.lastTaskY = null;
-                this.eventQueue = []; // Clear the queue
+                this.eventQueue = [];
 
                 if (this.$player_button) {
                     if (this.options.player_use_fa) {
@@ -249,7 +245,6 @@ export default class Gantt {
                     }
                 }
 
-                // Pause animated highlight
                 if (this.$animated_highlight) {
                     this.$animated_highlight.style.animation = 'none';
                     this.$animated_highlight.style.animationPlayState =
@@ -453,7 +448,7 @@ export default class Gantt {
             })
             .filter((t) => t);
         this.setup_dependencies();
-        this.scroll_to_latest_task(); // Scroll to the latest task after setup
+        this.scroll_to_latest_task();
     }
 
     setup_dependencies() {
@@ -469,7 +464,7 @@ export default class Gantt {
     refresh(tasks) {
         this.setup_tasks(tasks);
         this.change_view_mode();
-        this.scroll_to_latest_task(); // Scroll to the latest task after refresh
+        this.scroll_to_latest_task();
     }
 
     update_task(id, new_details) {
@@ -633,7 +628,6 @@ export default class Gantt {
             this.set_dimensions();
             this.set_scroll_position(this.options.scroll_to);
 
-            // Ensure animated highlights are correctly positioned after render
             if (this.options.custom_marker) {
                 const diff = date_utils.diff(
                     this.config.custom_marker_date,
@@ -1276,7 +1270,6 @@ export default class Gantt {
                 console.log('eventQueue before process:', this.eventQueue);
             }
 
-            // Start the player interval
             this.player_interval = setInterval(
                 this.player_update.bind(this),
                 this.options.player_interval || 1000,
