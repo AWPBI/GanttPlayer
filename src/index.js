@@ -1193,9 +1193,23 @@ export default class Gantt {
         }
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
-            // Initialize the event queue for the current custom_marker_date
-            this.initializeEventQueue();
+            // Immediately check for tasks overlapping the initial custom_marker_date
+            if (this.options.custom_marker) {
+                const current_date = this.config.custom_marker_date;
+                const initial_overlapping = this.tasks.filter(
+                    (task) =>
+                        task._start <= current_date && current_date < task._end,
+                );
+                initial_overlapping.forEach((task) => {
+                    this.eventQueue.push({ event: 'bar_enter', task });
+                });
+                this.overlapping_tasks = new Set(
+                    initial_overlapping.map((task) => task.id),
+                );
+                this.processEventQueue();
+            }
 
+            // Start the player interval
             this.player_interval = setInterval(
                 this.player_update.bind(this),
                 this.options.player_interval || 1000,
@@ -1273,8 +1287,21 @@ export default class Gantt {
         const left = (diff / this.config.step) * this.config.column_width;
         this.play_animated_highlight(left, this.config.custom_marker_date);
 
-        // Initialize the event queue for the reset custom_marker_date
-        this.initializeEventQueue();
+        // Immediately check for tasks overlapping the reset custom_marker_date
+        if (this.options.custom_marker) {
+            const current_date = this.config.custom_marker_date;
+            const initial_overlapping = this.tasks.filter(
+                (task) =>
+                    task._start <= current_date && current_date < task._end,
+            );
+            initial_overlapping.forEach((task) => {
+                this.eventQueue.push({ event: 'bar_enter', task });
+            });
+            this.overlapping_tasks = new Set(
+                initial_overlapping.map((task) => task.id),
+            );
+            this.processEventQueue();
+        }
 
         this.trigger_event('reset', []);
     }
