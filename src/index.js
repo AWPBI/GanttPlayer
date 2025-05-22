@@ -30,8 +30,10 @@ export default class Gantt {
 
         console.log('Processing eventQueue:', this.eventQueue);
 
-        while (this.eventQueue.length > 0) {
-            const { event, task } = this.eventQueue[0];
+        const queue = [...this.eventQueue]; // Copy queue to avoid mutation issues
+        this.eventQueue = []; // Clear queue immediately
+
+        for (const { event, task } of queue) {
             try {
                 console.log(`Executing ${event} for task ${task.id}`);
                 await this.options['on_' + event](task);
@@ -41,7 +43,6 @@ export default class Gantt {
                     error,
                 );
             }
-            this.eventQueue.shift();
         }
 
         this.isProcessingQueue = false;
@@ -1230,10 +1231,9 @@ export default class Gantt {
 
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
-            // Immediately check for tasks overlapping or starting within the first step
+            // Check for tasks overlapping or starting within the first step
             if (this.options.custom_marker) {
                 const current_date = new Date(this.config.custom_marker_date);
-                // Calculate the next date after one step
                 const next_date = date_utils.add(
                     current_date,
                     this.config.step,
@@ -1248,7 +1248,6 @@ export default class Gantt {
                 console.log('Tasks:', this.tasks.length);
 
                 const initial_overlapping = this.tasks.filter((task) => {
-                    // Task is active at current_date or starts/ends within [current_date, next_date)
                     const isOverlapping =
                         (task._start <= current_date &&
                             current_date < task._end) ||
@@ -1275,9 +1274,6 @@ export default class Gantt {
                 );
                 console.log('overlapping_tasks:', [...this.overlapping_tasks]);
                 console.log('eventQueue before process:', this.eventQueue);
-
-                // Force process the queue immediately
-                this.processEventQueue(true);
             }
 
             // Start the player interval
@@ -1286,6 +1282,11 @@ export default class Gantt {
                 this.options.player_interval || 1000,
             );
             this.trigger_event('start', []);
+
+            // Process the initial event queue after start event
+            if (this.eventQueue.length > 0) {
+                this.processEventQueue(true);
+            }
 
             if (this.options.player_use_fa) {
                 this.$player_button.classList.remove('fa-play');
