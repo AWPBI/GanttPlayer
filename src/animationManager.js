@@ -10,14 +10,30 @@ export class AnimationManager {
     }
 
     initialize() {
+        let markerDate = this.gantt.config.custom_marker_date;
+        if (!markerDate || isNaN(markerDate)) {
+            markerDate = new Date(this.gantt.gantt_start);
+            this.gantt.config.custom_marker_date = markerDate;
+        } else {
+            // Clamp markerDate between gantt_start and gantt_end
+            markerDate = new Date(markerDate);
+            if (markerDate < this.gantt.gantt_start) {
+                markerDate = new Date(this.gantt.gantt_start);
+                this.gantt.config.custom_marker_date = markerDate;
+            } else if (markerDate > this.gantt.gantt_end) {
+                markerDate = new Date(this.gantt.gantt_end);
+                this.gantt.config.custom_marker_date = markerDate;
+            }
+        }
+
         const diff = date_utils.diff(
-            this.gantt.config.custom_marker_date,
+            markerDate,
             this.gantt.gantt_start,
             this.gantt.config.unit,
         );
         const left =
             (diff / this.gantt.config.step) * this.gantt.config.column_width;
-        this.playAnimatedHighlight(left, this.gantt.config.custom_marker_date);
+        this.playAnimatedHighlight(left, markerDate);
     }
 
     playAnimatedHighlight(left, dateObj) {
@@ -270,10 +286,6 @@ export class AnimationManager {
                             targetTask._index *
                                 (this.gantt.options.bar_height +
                                     this.gantt.options.padding);
-                    }
-
-                    if (this.eventQueueManager) {
-                        this.eventQueueManager.lastTaskY = taskY;
                     }
                 } else if (
                     this.eventQueueManager &&
