@@ -15,7 +15,7 @@ export default class Gantt {
         this.setup_options(options);
         this.eventQueueManager = new EventQueueManager(this);
         this.setup_tasks(tasks);
-        this.renderer = new GanttRenderer(this); // Initialize renderer
+        this.renderer = new GanttRenderer(this);
         this.change_view_mode();
         this.bind_events();
         this.scrollAnimationFrame = null;
@@ -383,180 +383,18 @@ export default class Gantt {
             }
 
             this.clear();
-            this.setup_layers();
+            this.renderer.setup_layers();
             this.renderer.make_grid();
             this.renderer.make_dates();
             this.renderer.make_grid_extras();
             this.renderer.make_bars();
             this.renderer.make_arrows();
             this.map_arrows_on_bars();
-            this.set_dimensions();
+            this.renderer.set_dimensions();
             this.set_scroll_position(this.options.scroll_to);
-
-            if (this.options.custom_marker) {
-                const diff = date_utils.diff(
-                    this.config.custom_marker_date,
-                    this.gantt_start,
-                    this.config.unit,
-                );
-                const left =
-                    (diff / this.config.step) * this.config.column_width;
-                this.play_animated_highlight(
-                    left,
-                    this.config.custom_marker_date,
-                );
-            }
         } catch (error) {
             console.error('Error during render:', error);
         }
-    }
-
-    setup_layers() {
-        this.layers = {};
-        const layers = ['grid', 'arrow', 'progress', 'bar'];
-        for (let layer of layers) {
-            this.layers[layer] = createSVG('g', {
-                class: layer,
-                append_to: this.$svg,
-            });
-        }
-        this.$extras = this.create_el({
-            classes: 'extras',
-            append_to: this.$container,
-        });
-        this.$adjust = this.create_el({
-            classes: 'adjust hide',
-            append_to: this.$extras,
-            type: 'button',
-        });
-        this.$adjust.innerHTML = '←';
-    }
-
-    // Moved make_ functions to GanttRenderer, so they are removed from here
-
-    highlight_holidays() {
-        let labels = {};
-        if (!this.options.holidays) return;
-
-        for (let color in this.options.holidays) {
-            let check_highlight = this.options.holidays[color];
-            if (check_highlight === 'weekend') {
-                check_highlight = (d) => d.getDay() === 0 || d.getDay() === 6;
-            }
-            let extra_func;
-
-            if (typeof check_highlight === 'object') {
-                let f = check_highlight.find((k) => typeof k === 'function');
-                if (f) {
-                    extra_func = f;
-                }
-                if (check_highlight.name) {
-                    let dateObj = new Date(check_highlight.date);
-                    check_highlight = (d) => dateObj.getTime() === d.getTime();
-                    labels[dateObj] = check_highlight.name;
-                } else {
-                    check_highlight = (d) =>
-                        this.options.holidays[color]
-                            .filter((k) => typeof k !== 'function')
-                            .map((k) => {
-                                if (k.name) {
-                                    let dateObj = new Date(k.date);
-                                    labels[dateObj] = k.name;
-                                    return dateObj.getTime();
-                                }
-                                return new Date(k).getTime();
-                            })
-                            .includes(d.getTime());
-                }
-            }
-            for (
-                let d = new Date(this.gantt_start);
-                d <= this.gantt_end;
-                d.setDate(d.getDate() + 1)
-            ) {
-                if (
-                    this.config.ignored_dates.find(
-                        (k) => k.getTime() === d.getTime(),
-                    ) ||
-                    (this.config.ignored_function &&
-                        this.config.ignored_function(d))
-                ) {
-                    continue;
-                }
-                if (check_highlight(d) || (extra_func && extra_func(d))) {
-                    const x =
-                        (date_utils.diff(
-                            d,
-                            this.gantt_start,
-                            this.config.unit,
-                        ) /
-                            this.config.step) *
-                        this.config.column_width;
-                    const height = this.grid_height - this.config.header_height;
-                    const d_formatted = date_utils
-                        .format(d, 'YYYY-MM-DD', this.options.language)
-                        .replace(' ', '_');
-
-                    if (labels[d]) {
-                        let label = this.create_el({
-                            classes: 'holiday-label ' + 'label_' + d_formatted,
-                            append_to: this.$extras,
-                        });
-                        label.textContent = labels[d];
-                    }
-                    createSVG('rect', {
-                        x: Math.round(x),
-                        y: this.config.header_height,
-                        width:
-                            this.config.column_width /
-                            date_utils.convert_scales(
-                                this.config.view_mode.step,
-                                'day',
-                            ),
-                        height,
-                        class: 'holiday-highlight ' + d_formatted,
-                        style: `fill: ${color};`,
-                        append_to: this.layers.grid,
-                    });
-                }
-            }
-        }
-    }
-
-    highlight_current() {
-        const res = this.get_closest_date();
-        if (!res) return null;
-
-        const [_, el] = res;
-        el.classList.add('current-date-highlight');
-
-        const dateObj = new Date();
-
-        const diff_in_units = date_utils.diff(
-            dateObj,
-            this.gantt_start,
-            this.config.unit,
-        );
-
-        const left =
-            (diff_in_units / this.config.step) * this.config.column_width;
-
-        this.$current_highlight = this.create_el({
-            top: this.config.header_height,
-            left,
-            height: this.grid_height - this.config.header_height,
-            classes: 'current-highlight',
-            append_to: this.$container,
-        });
-        this.$current_ball_highlight = this.create_el({
-            top: this.config.header_height - 6,
-            left: left - 2.5,
-            width: 6,
-            height: 6,
-            classes: 'current-ball-highlight',
-            append_to: this.$header,
-        });
-        return { left, dateObj };
     }
 
     highlight_custom(date) {
@@ -567,63 +405,8 @@ export default class Gantt {
     }
 
     play_animated_highlight(left, dateObj) {
-        let adjustedLeft = left;
-        let adjustedDateObj = dateObj;
-        if (!dateObj || isNaN(left) || left === 0) {
-            adjustedDateObj =
-                this.config.custom_marker_date || new Date(this.gantt_start);
-            adjustedLeft =
-                (date_utils.diff(
-                    adjustedDateObj,
-                    this.gantt_start,
-                    this.config.unit,
-                ) /
-                    this.config.step) *
-                this.config.column_width;
-        }
-
-        let gridHeight = this.grid_height || 1152;
-        const gridElement = this.$svg.querySelector('.grid-background');
-        if (gridElement) {
-            gridHeight =
-                parseFloat(gridElement.getAttribute('height')) || gridHeight;
-        } else {
-            console.warn(
-                'Grid element not found, using default height:',
-                gridHeight,
-            );
-        }
-
-        if (!this.$animated_highlight) {
-            this.$animated_highlight = this.create_el({
-                top: this.config.header_height,
-                left: adjustedLeft,
-                width: 2,
-                height: gridHeight - this.config.header_height,
-                classes: 'animated-highlight',
-                append_to: this.$container,
-                style: 'background: var(--g-custom-highlight); z-index: 999;',
-            });
-        } else {
-            this.$animated_highlight.style.left = `${adjustedLeft}px`;
-            this.$animated_highlight.style.height = `${
-                gridHeight - this.config.header_height
-            }px`;
-        }
-
-        if (!this.$animated_ball_highlight) {
-            this.$animated_ball_highlight = this.create_el({
-                top: this.config.header_height - 6,
-                left: adjustedLeft - 2,
-                width: 6,
-                height: 6,
-                classes: 'animated-ball-highlight',
-                append_to: this.$header,
-                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
-            });
-        } else {
-            this.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
-        }
+        const { left: adjustedLeft, dateObj: adjustedDateObj } =
+            this.renderer.render_animated_highlight(left, dateObj);
 
         if (this.options.player_state) {
             let animationDuration =
@@ -827,8 +610,6 @@ export default class Gantt {
         return $el;
     }
 
-    // Moved make_dates, get_dates_to_draw, get_date_info to GanttRenderer
-
     map_arrows_on_bars() {
         for (let bar of this.bars) {
             bar.arrows = this.arrows.filter((arrow) => {
@@ -837,16 +618,6 @@ export default class Gantt {
                     arrow.to_task.task.id === bar.task.id
                 );
             });
-        }
-    }
-
-    set_dimensions() {
-        const { width: cur_width } = this.$svg.getBoundingClientRect();
-        const actual_width = this.$svg.querySelector('.grid .grid-row')
-            ? this.$svg.querySelector('.grid .grid-row').getAttribute('width')
-            : 0;
-        if (cur_width < actual_width) {
-            this.$svg.setAttribute('width', actual_width);
         }
     }
 

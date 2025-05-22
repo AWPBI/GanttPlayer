@@ -9,6 +9,27 @@ export default class GanttRenderer {
         this.gantt = gantt;
     }
 
+    setup_layers() {
+        this.gantt.layers = {};
+        const layers = ['grid', 'arrow', 'progress', 'bar'];
+        for (let layer of layers) {
+            this.gantt.layers[layer] = createSVG('g', {
+                class: layer,
+                append_to: this.gantt.$svg,
+            });
+        }
+        this.gantt.$extras = this.gantt.create_el({
+            classes: 'extras',
+            append_to: this.gantt.$container,
+        });
+        this.gantt.$adjust = this.gantt.create_el({
+            classes: 'adjust hide',
+            append_to: this.gantt.$extras,
+            type: 'button',
+        });
+        this.gantt.$adjust.innerHTML = '←';
+    }
+
     make_grid() {
         this.make_grid_background();
         this.make_grid_rows();
@@ -238,7 +259,7 @@ export default class GanttRenderer {
     }
 
     make_grid_highlights() {
-        this.gantt.highlight_holidays();
+        this.highlight_holidays();
         this.gantt.config.ignored_positions = [];
 
         const height =
@@ -285,7 +306,7 @@ export default class GanttRenderer {
             });
         }
 
-        this.gantt.highlight_current();
+        this.highlight_current();
         if (this.gantt.options.custom_marker) {
             if (
                 !this.gantt.config.custom_marker_date ||
@@ -317,6 +338,212 @@ export default class GanttRenderer {
                 this.gantt.config.custom_marker_date,
             );
             this.gantt.eventQueueManager.initializeEventQueue();
+        }
+    }
+
+    highlight_holidays() {
+        let labels = {};
+        if (!this.gantt.options.holidays) return;
+
+        for (let color in this.gantt.options.holidays) {
+            let check_highlight = this.gantt.options.holidays[color];
+            if (check_highlight === 'weekend') {
+                check_highlight = (d) => d.getDay() === 0 || d.getDay() === 6;
+            }
+            let extra_func;
+
+            if (typeof check_highlight === 'object') {
+                let f = check_highlight.find((k) => typeof k === 'function');
+                if (f) {
+                    extra_func = f;
+                }
+                if (check_highlight.name) {
+                    let dateObj = new Date(check_highlight.date);
+                    check_highlight = (d) => dateObj.getTime() === d.getTime();
+                    labels[dateObj] = check_highlight.name;
+                } else {
+                    check_highlight = (d) =>
+                        this.gantt.options.holidays[color]
+                            .filter((k) => typeof k !== 'function')
+                            .map((k) => {
+                                if (k.name) {
+                                    let dateObj = new Date(k.date);
+                                    labels[dateObj] = k.name;
+                                    return dateObj.getTime();
+                                }
+                                return new Date(k).getTime();
+                            })
+                            .includes(d.getTime());
+                }
+            }
+            for (
+                let d = new Date(this.gantt.gantt_start);
+                d <= this.gantt.gantt_end;
+                d.setDate(d.getDate() + 1)
+            ) {
+                if (
+                    this.gantt.config.ignored_dates.find(
+                        (k) => k.getTime() === d.getTime(),
+                    ) ||
+                    (this.gantt.config.ignored_function &&
+                        this.gantt.config.ignored_function(d))
+                ) {
+                    continue;
+                }
+                if (check_highlight(d) || (extra_func && extra_func(d))) {
+                    const x =
+                        (date_utils.diff(
+                            d,
+                            this.gantt.gantt_start,
+                            this.gantt.config.unit,
+                        ) /
+                            this.gantt.config.step) *
+                        this.gantt.config.column_width;
+                    const height =
+                        this.gantt.grid_height -
+                        this.gantt.config.header_height;
+                    const d_formatted = date_utils
+                        .format(d, 'YYYY-MM-DD', this.gantt.options.language)
+                        .replace(' ', '_');
+
+                    if (labels[d]) {
+                        let label = this.gantt.create_el({
+                            classes: 'holiday-label ' + 'label_' + d_formatted,
+                            append_to: this.gantt.$extras,
+                        });
+                        label.textContent = labels[d];
+                    }
+                    createSVG('rect', {
+                        x: Math.round(x),
+                        y: this.gantt.config.header_height,
+                        width:
+                            this.gantt.config.column_width /
+                            date_utils.convert_scales(
+                                this.gantt.config.view_mode.step,
+                                'day',
+                            ),
+                        height,
+                        class: 'holiday-highlight ' + d_formatted,
+                        style: `fill: ${color};`,
+                        append_to: this.gantt.layers.grid,
+                    });
+                }
+            }
+        }
+    }
+
+    highlight_current() {
+        const res = this.gantt.get_closest_date();
+        if (!res) return null;
+
+        const [_, el] = res;
+        el.classList.add('current-date-highlight');
+
+        const dateObj = new Date();
+
+        const diff_in_units = date_utils.diff(
+            dateObj,
+            this.gantt.gantt_start,
+            this.gantt.config.unit,
+        );
+
+        const left =
+            (diff_in_units / this.gantt.config.step) *
+            this.gantt.config.column_width;
+
+        this.gantt.$current_highlight = this.gantt.create_el({
+            top: this.gantt.config.header_height,
+            left,
+            height: this.gantt.grid_height - this.gantt.config.header_height,
+            classes: 'current-highlight',
+            append_to: this.gantt.$container,
+        });
+        this.gantt.$current_ball_highlight = this.gantt.create_el({
+            top: this.gantt.config.header_height - 6,
+            left: left - 2.5,
+            width: 6,
+            height: 6,
+            classes: 'current-ball-highlight',
+            append_to: this.gantt.$header,
+        });
+        return { left, dateObj };
+    }
+
+    render_animated_highlight(left, dateObj) {
+        let adjustedLeft = left;
+        let adjustedDateObj = dateObj;
+        if (!dateObj || isNaN(left) || left === 0) {
+            adjustedDateObj =
+                this.gantt.config.custom_marker_date ||
+                new Date(this.gantt.gantt_start);
+            adjustedLeft =
+                (date_utils.diff(
+                    adjustedDateObj,
+                    this.gantt.gantt_start,
+                    this.gantt.config.unit,
+                ) /
+                    this.gantt.config.step) *
+                this.gantt.config.column_width;
+        }
+
+        let gridHeight = this.gantt.grid_height || 1152;
+        const gridElement = this.gantt.$svg.querySelector('.grid-background');
+        if (gridElement) {
+            gridHeight =
+                parseFloat(gridElement.getAttribute('height')) || gridHeight;
+        } else {
+            console.warn(
+                'Grid element not found, using default height:',
+                gridHeight,
+            );
+        }
+
+        if (!this.gantt.$animated_highlight) {
+            this.gantt.$animated_highlight = this.gantt.create_el({
+                top: this.gantt.config.header_height,
+                left: adjustedLeft,
+                width: 2,
+                height: gridHeight - this.gantt.config.header_height,
+                classes: 'animated-highlight',
+                append_to: this.gantt.$container,
+                style: 'background: var(--g-custom-highlight); z-index: 999;',
+            });
+        } else {
+            this.gantt.$animated_highlight.style.left = `${adjustedLeft}px`;
+            this.gantt.$animated_highlight.style.height = `${
+                gridHeight - this.gantt.config.header_height
+            }px`;
+        }
+
+        if (!this.gantt.$animated_ball_highlight) {
+            this.gantt.$animated_ball_highlight = this.gantt.create_el({
+                top: this.gantt.config.header_height - 6,
+                left: adjustedLeft - 2,
+                width: 6,
+                height: 6,
+                classes: 'animated-ball-highlight',
+                append_to: this.gantt.$header,
+                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
+            });
+        } else {
+            this.gantt.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
+        }
+
+        return {
+            left: adjustedLeft,
+            dateObj: adjustedDateObj,
+        };
+    }
+
+    set_dimensions() {
+        const { width: cur_width } = this.gantt.$svg.getBoundingClientRect();
+        const actual_width = this.gantt.$svg.querySelector('.grid .grid-row')
+            ? this.gantt.$svg
+                  .querySelector('.grid .grid-row')
+                  .getAttribute('width')
+            : 0;
+        if (cur_width < actual_width) {
+            this.gantt.$svg.setAttribute('width', actual_width);
         }
     }
 
