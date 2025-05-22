@@ -2,8 +2,12 @@ import date_utils from './date_utils';
 import { $, createSVG } from './svg_utils';
 
 import Arrow from './arrow';
-import Bar from './bar';
-import Popup from './popup';
+import TaskManager from './taskManager';
+import GridRenderer from './gridRenderer';
+import AnimationManager from './animationManager';
+import EventQueueManager from './eventQueueManager';
+import EventBinder from './eventBinder';
+import PopupManager from './popupManager';
 
 import { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES } from './defaults';
 
