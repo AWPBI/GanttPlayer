@@ -1,3 +1,6 @@
+import date_utils from './date_utils';
+import { $, createSVG } from './svg_utils';
+
 export default class GridRenderer {
     constructor(gantt) {
         this.gantt = gantt;

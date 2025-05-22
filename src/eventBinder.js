@@ -1,3 +1,5 @@
+import { $ } from './svg_utils';
+
 export default class EventBinder {
     constructor(gantt) {
         this.gantt = gantt;

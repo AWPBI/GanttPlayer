@@ -1,4 +1,5 @@
 import Bar from './bar';
+import date_utils from './date_utils';
 
 export default class TaskManager {
     constructor(gantt) {

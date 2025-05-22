@@ -1,3 +1,4 @@
+import date_utils from './date_utils';
 export default class AnimationManager {
     constructor(gantt) {
         this.gantt = gantt;
