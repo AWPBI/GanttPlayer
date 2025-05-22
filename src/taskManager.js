@@ -11,6 +11,7 @@ export default class TaskManager {
     }
 
     setupTasks(tasks) {
+        console.log('Raw tasks:', tasks); // Debug log
         this.tasks = tasks
             .map((task, i) => {
                 // Validate task object
@@ -18,24 +19,38 @@ export default class TaskManager {
                     console.error(
                         `Task at index ${i} is invalid: ${JSON.stringify(task)}`,
                     );
-                    return false;
+                    return null;
                 }
 
-                // Check required start field
+                // Check required fields
                 if (!task.start) {
                     console.error(
                         `Task "${task.id || i}" doesn't have a start date`,
                     );
-                    return false;
+                    return null;
+                }
+                if (!task.end && task.duration === undefined) {
+                    console.error(
+                        `Task "${task.id || i}" doesn't have an end date or duration`,
+                    );
+                    return null;
+                }
+
+                // Set default name if missing
+                if (!task.name || typeof task.name !== 'string') {
+                    console.warn(
+                        `Task "${task.id || i}" missing name, using default`,
+                    );
+                    task.name = `Task ${i + 1}`;
                 }
 
                 // Parse start date
                 task._start = date_utils.parse(task.start);
-                // Allow potentially invalid dates to pass, like unsplit version
                 if (!task._start || isNaN(task._start.getTime())) {
                     console.warn(
-                        `Task "${task.id || i}" has potentially invalid start date: ${task.start}`,
+                        `Task "${task.id || i}" has invalid start date: ${task.start}`,
                     );
+                    return null;
                 }
 
                 // Handle end date or duration
@@ -49,26 +64,21 @@ export default class TaskManager {
                             console.error(
                                 `Task "${task.id || i}" has invalid duration: ${tmpDuration}`,
                             );
-                            return false;
+                            return null;
                         }
                         task._end = date_utils.add(task._end, duration, scale);
                     });
-                    // Set task.end to match _end, preserving original format
                     task.end = task._end.toString();
                 } else if (task.end) {
                     task._end = date_utils.parse(task.end);
-                } else {
-                    console.error(
-                        `Task "${task.id || i}" doesn't have an end date`,
-                    );
-                    return false;
                 }
 
                 // Validate end date
                 if (!task._end || isNaN(task._end.getTime())) {
                     console.warn(
-                        `Task "${task.id || i}" has potentially invalid end date: ${task.end}`,
+                        `Task "${task.id || i}" has invalid end date: ${task.end}`,
                     );
+                    return null;
                 }
 
                 // Validate date range
@@ -77,17 +87,16 @@ export default class TaskManager {
                     console.error(
                         `Start of task can't be after end of task: in task "${task.id || i}"`,
                     );
-                    return false;
+                    return null;
                 }
-
                 if (diff > 10) {
                     console.error(
                         `The duration of task "${task.id || i}" is too long (above ten years)`,
                     );
-                    return false;
+                    return null;
                 }
 
-                // Adjust end date if at midnight, like unsplit version
+                // Adjust end date if at midnight
                 const task_end_values = date_utils.get_date_values(task._end);
                 if (task_end_values.slice(3).every((d) => d === 0)) {
                     task._end = date_utils.add(task._end, 24, 'hour');
@@ -123,8 +132,9 @@ export default class TaskManager {
 
                 return task;
             })
-            .filter((t) => t);
+            .filter((t) => t !== null && t !== undefined); // Strict filtering
 
+        console.log('Processed tasks:', this.tasks); // Debug log
         if (!this.tasks.length) {
             console.warn('No valid tasks provided; Gantt chart may be empty');
         }
