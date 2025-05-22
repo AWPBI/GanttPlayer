@@ -1,6 +1,7 @@
 import date_utils from './date_utils';
 import { $, createSVG } from './svg_utils';
 import { EventQueueManager } from './eventQueueManager';
+import { AnimationManager } from './animationManager';
 import Arrow from './arrow';
 import Bar from './bar';
 import Popup from './popup';
@@ -11,7 +12,11 @@ export default class Gantt {
     constructor(wrapper, tasks, options) {
         this.setup_wrapper(wrapper);
         this.setup_options(options);
-        this.eventQueueManager = new EventQueueManager(this); // Moved earlier
+        this.eventQueueManager = new EventQueueManager(this);
+        this.animationManager = new AnimationManager(
+            this,
+            this.eventQueueManager,
+        );
         this.setup_tasks(tasks);
         this.change_view_mode();
         this.bind_events();
@@ -391,17 +396,7 @@ export default class Gantt {
             this.set_scroll_position(this.options.scroll_to);
 
             if (this.options.custom_marker) {
-                const diff = date_utils.diff(
-                    this.config.custom_marker_date,
-                    this.gantt_start,
-                    this.config.unit,
-                );
-                const left =
-                    (diff / this.config.step) * this.config.column_width;
-                this.play_animated_highlight(
-                    left,
-                    this.config.custom_marker_date,
-                );
+                this.animationManager.initialize();
             }
         } catch (error) {
             console.error('Error during render:', error);
@@ -776,7 +771,7 @@ export default class Gantt {
         console.warn(
             'highlight_custom is deprecated; using animated-highlight instead',
         );
-        return this.play_animated_highlight(0, date);
+        return this.animationManager.playAnimatedHighlight(0, date);
     }
 
     make_grid_highlights() {
@@ -841,143 +836,8 @@ export default class Gantt {
             ) {
                 this.config.custom_marker_date = new Date(this.gantt_start);
             }
-            const diff = date_utils.diff(
-                this.config.custom_marker_date,
-                this.gantt_start,
-                this.config.unit,
-            );
-            const left = (diff / this.config.step) * this.config.column_width;
-            this.play_animated_highlight(left, this.config.custom_marker_date);
             this.eventQueueManager.initializeEventQueue();
         }
-    }
-
-    play_animated_highlight(left, dateObj) {
-        let adjustedLeft = left;
-        let adjustedDateObj = dateObj;
-        if (!dateObj || isNaN(left) || left === 0) {
-            adjustedDateObj =
-                this.config.custom_marker_date || new Date(this.gantt_start);
-            adjustedLeft =
-                (date_utils.diff(
-                    adjustedDateObj,
-                    this.gantt_start,
-                    this.config.unit,
-                ) /
-                    this.config.step) *
-                this.config.column_width;
-        }
-
-        let gridHeight = this.grid_height || 1152;
-        const gridElement = this.$svg.querySelector('.grid-background');
-        if (gridElement) {
-            gridHeight =
-                parseFloat(gridElement.getAttribute('height')) || gridHeight;
-        } else {
-            console.warn(
-                'Grid element not found, using default height:',
-                gridHeight,
-            );
-        }
-
-        if (!this.$animated_highlight) {
-            this.$animated_highlight = this.create_el({
-                top: this.config.header_height,
-                left: adjustedLeft,
-                width: 2,
-                height: gridHeight - this.config.header_height,
-                classes: 'animated-highlight',
-                append_to: this.$container,
-                style: 'background: var(--g-custom-highlight); z-index: 999;',
-            });
-        } else {
-            this.$animated_highlight.style.left = `${adjustedLeft}px`;
-            this.$animated_highlight.style.height = `${
-                gridHeight - this.config.header_height
-            }px`;
-        }
-
-        if (!this.$animated_ball_highlight) {
-            this.$animated_ball_highlight = this.create_el({
-                top: this.config.header_height - 6,
-                left: adjustedLeft - 2,
-                width: 6,
-                height: 6,
-                classes: 'animated-ball-highlight',
-                append_to: this.$header,
-                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
-            });
-        } else {
-            this.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
-        }
-
-        if (this.options.player_state) {
-            let animationDuration =
-                (this.options.player_interval || 1000) / 1000;
-            let moveDistance = this.config.column_width;
-
-            if (
-                this.config.player_end_date &&
-                adjustedDateObj >= this.config.player_end_date
-            ) {
-                return {
-                    left: adjustedLeft,
-                    dateObj: adjustedDateObj,
-                };
-            } else if (
-                this.config.player_end_date &&
-                date_utils.add(
-                    adjustedDateObj,
-                    this.config.step,
-                    this.config.unit,
-                ) > this.config.player_end_date
-            ) {
-                const remainingTime = date_utils.diff(
-                    this.config.player_end_date,
-                    adjustedDateObj,
-                    'millisecond',
-                );
-                animationDuration =
-                    remainingTime / (this.options.player_interval || 1000);
-                const totalUnits = date_utils.diff(
-                    this.config.player_end_date,
-                    this.gantt_start,
-                    this.config.unit,
-                );
-                const endLeft =
-                    (totalUnits / this.config.step) * this.config.column_width;
-                moveDistance = endLeft - adjustedLeft;
-            }
-
-            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
-                (el) => {
-                    el.style.setProperty(
-                        '--animation-duration',
-                        `${animationDuration}s`,
-                    );
-                    el.style.setProperty(
-                        '--move-distance',
-                        `${moveDistance}px`,
-                    );
-                    el.style.animation = 'none';
-                    el.offsetHeight;
-                    el.style.animation = `moveRight ${animationDuration}s linear forwards`;
-                    el.style.animationPlayState = 'running';
-                },
-            );
-        } else {
-            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
-                (el) => {
-                    el.style.animation = 'none';
-                    el.style.animationPlayState = 'paused';
-                },
-            );
-        }
-
-        return {
-            left: adjustedLeft,
-            dateObj: adjustedDateObj,
-        };
     }
 
     toggle_play() {
@@ -1015,20 +875,11 @@ export default class Gantt {
                 this.$player_button.textContent = 'Pause';
             }
 
-            const diff = date_utils.diff(
-                this.config.custom_marker_date,
-                this.gantt_start,
-                this.config.unit,
-            );
-            const left = (diff / this.config.step) * this.config.column_width;
-            this.play_animated_highlight(left, this.config.custom_marker_date);
+            this.animationManager.startAnimation();
         } else {
+            this.animationManager.stopAnimation();
             clearInterval(this.player_interval);
             this.player_interval = null;
-            if (this.scrollAnimationFrame) {
-                cancelAnimationFrame(this.scrollAnimationFrame);
-                this.scrollAnimationFrame = null;
-            }
             this.trigger_event('pause', []);
 
             if (this.options.player_use_fa) {
@@ -1036,14 +887,6 @@ export default class Gantt {
                 this.$player_button.classList.add('fa-play');
             } else {
                 this.$player_button.textContent = 'Play';
-            }
-
-            if (this.$animated_highlight) {
-                this.$animated_highlight.style.animationPlayState = 'paused';
-            }
-            if (this.$animated_ball_highlight) {
-                this.$animated_ball_highlight.style.animationPlayState =
-                    'paused';
             }
         }
     }
@@ -1063,10 +906,8 @@ export default class Gantt {
         this.eventQueueManager.eventQueue = [];
         clearInterval(this.player_interval);
         this.player_interval = null;
-        if (this.scrollAnimationFrame) {
-            cancelAnimationFrame(this.scrollAnimationFrame);
-            this.scrollAnimationFrame = null;
-        }
+
+        this.animationManager.resetAnimation();
 
         if (this.options.player_use_fa) {
             this.$player_button.classList.remove('fa-pause');
@@ -1076,14 +917,6 @@ export default class Gantt {
         }
 
         this.render();
-        const diff = date_utils.diff(
-            this.config.custom_marker_date,
-            this.gantt_start,
-            this.config.unit,
-        );
-        const left = (diff / this.config.step) * this.config.column_width;
-        this.play_animated_highlight(left, this.config.custom_marker_date);
-
         this.trigger_event('reset', []);
     }
 
@@ -1397,155 +1230,6 @@ export default class Gantt {
             top: clampedScrollTop,
             behavior: 'smooth',
         });
-    }
-
-    start_scroll_animation(startLeft) {
-        if (this.scrollAnimationFrame) {
-            cancelAnimationFrame(this.scrollAnimationFrame);
-            this.scrollAnimationFrame = null;
-        }
-
-        if (!this.options.player_state) {
-            console.log('start_scroll_animation exited: player_state is false');
-            return;
-        }
-
-        const animationDuration = (this.options.player_interval || 1000) / 1000;
-        const moveDistance = this.config.column_width;
-        const startTime = performance.now();
-        const container = this.$container;
-        const viewportWidth = container.clientWidth;
-        const maxScroll = container.scrollWidth - viewportWidth;
-
-        const offset = viewportWidth / 6;
-
-        const animateScroll = (currentTime) => {
-            if (!this.options.player_state) {
-                console.log('animateScroll exited: player_state is false');
-                this.scrollAnimationFrame = null;
-                return;
-            }
-
-            const elapsed = (currentTime - startTime) / 1000;
-            const progress = Math.min(elapsed / animationDuration, 1);
-            const currentLeft = startLeft + moveDistance * progress;
-
-            let targetScroll = currentLeft - offset;
-            targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
-
-            container.scrollLeft = targetScroll;
-
-            if (this.tasks.length) {
-                const currentDate = this.config.custom_marker_date;
-                const activeTasks = this.tasks.filter(
-                    (task) =>
-                        task._start <= currentDate && currentDate <= task._end,
-                );
-
-                let taskY;
-                if (activeTasks.length) {
-                    const targetTask = activeTasks.reduce(
-                        (min, task) => (task._index < min._index ? task : min),
-                        activeTasks[0],
-                    );
-
-                    const barWrapper = this.$svg.querySelector(
-                        `.bar-wrapper[data-id="${targetTask.id}"]`,
-                    );
-
-                    if (barWrapper) {
-                        taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
-                        if (taskY === 0) {
-                            taskY =
-                                this.config.header_height +
-                                targetTask._index *
-                                    (this.options.bar_height +
-                                        this.options.padding);
-                        }
-                    } else {
-                        taskY =
-                            this.config.header_height +
-                            targetTask._index *
-                                (this.options.bar_height +
-                                    this.options.padding);
-                    }
-
-                    if (this.eventQueueManager) {
-                        this.eventQueueManager.lastTaskY = taskY;
-                    }
-                } else if (
-                    this.eventQueueManager &&
-                    this.eventQueueManager.lastTaskY !== null
-                ) {
-                    taskY = this.eventQueueManager.lastTaskY;
-                } else {
-                    const targetTask = this.tasks.reduce(
-                        (earliest, task) =>
-                            task._start < earliest._start ? task : earliest,
-                        this.tasks[0],
-                    );
-
-                    const barWrapper = this.$svg.querySelector(
-                        `.bar-wrapper[data-id="${targetTask.id}"]`,
-                    );
-
-                    if (barWrapper) {
-                        taskY = parseFloat(barWrapper.getAttribute('y')) || 0;
-                        if (taskY === 0) {
-                            taskY =
-                                this.config.header_height +
-                                targetTask._index *
-                                    (this.options.bar_height +
-                                        this.options.padding);
-                        }
-                    } else {
-                        taskY =
-                            this.config.header_height +
-                            targetTask._index *
-                                (this.options.bar_height +
-                                    this.options.padding);
-                    }
-
-                    if (this.eventQueueManager) {
-                        this.eventQueueManager.lastTaskY = taskY;
-                    }
-                }
-
-                const adjustedY = taskY - this.config.header_height;
-
-                const viewportHeight = container.clientHeight;
-                const verticalOffset = this.options.padding;
-                let targetScrollTop = adjustedY - verticalOffset;
-
-                const maxScrollTop = container.scrollHeight - viewportHeight;
-                const clampedScrollTop = Math.max(
-                    0,
-                    Math.min(targetScrollTop, maxScrollTop),
-                );
-
-                container.scrollTop = clampedScrollTop;
-            }
-
-            const res = this.get_closest_date_to(
-                this.config.custom_marker_date,
-            );
-            const isBeyondEnd =
-                res && this.config.player_end_date
-                    ? res[0] >= this.config.player_end_date
-                    : false;
-
-            if (progress < 1 && !isBeyondEnd) {
-                this.scrollAnimationFrame =
-                    requestAnimationFrame(animateScroll);
-            } else {
-                this.scrollAnimationFrame = null;
-                if (isBeyondEnd) {
-                    this.eventQueueManager.handle_animation_end();
-                }
-            }
-        };
-
-        this.scrollAnimationFrame = requestAnimationFrame(animateScroll);
     }
 
     get_closest_date_to(date) {
@@ -2165,14 +1849,7 @@ export default class Gantt {
         }
         if (this.$extras) this.$extras.remove();
         if (this.popup) this.popup.hide();
-        if (this.$animated_highlight) {
-            this.$animated_highlight.remove();
-            this.$animated_highlight = null;
-        }
-        if (this.$animated_ball_highlight) {
-            this.$animated_ball_highlight.remove();
-            this.$animated_ball_highlight = null;
-        }
+        this.animationManager.clearElements();
     }
 }
 
