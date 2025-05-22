@@ -130,7 +130,7 @@ export default class TaskManager {
         }
 
         this.setupDependencies();
-        this.makeBars();
+        // Removed makeBars() call to align with unsplit version
     }
 
     setupDependencies() {

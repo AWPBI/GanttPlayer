@@ -33,7 +33,7 @@ export default class Gantt {
                 ? date_utils.parse(this.options.player_end_date)
                 : null,
             view_mode: this.options.view_mode,
-            extend_by_units: 10, // Added from unsplit version
+            extend_by_units: 10,
         };
 
         this.setupWrapper(wrapper);
@@ -48,6 +48,7 @@ export default class Gantt {
         this.layers = {};
         this.dates = [];
         this.arrows = [];
+        this.setupDates(); // Explicitly call setupDates before rendering
         this.changeViewMode();
         this.eventBinder.bindEvents();
         this.animationManager.initialize();
@@ -220,7 +221,7 @@ export default class Gantt {
             this.gantt_end = gantt_end;
         }
 
-        this.gantt_start.setHours(0, 0, 0, 0); // Align with unsplit version
+        this.gantt_start.setHours(0, 0, 0, 0);
 
         this.dates = [this.gantt_start];
         let curDate = this.gantt_start;
@@ -238,7 +239,7 @@ export default class Gantt {
         this.clear();
         this.setupLayers();
         this.gridRenderer.renderGrid();
-        this.taskManager.makeBars();
+        this.taskManager.makeBars(); // Moved from setupTasks to ensure gantt_start is set
         this.makeArrows();
         this.setDimensions();
         this.animationManager.playAnimatedHighlight();
