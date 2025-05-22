@@ -7,6 +7,7 @@ import Popup from './popup';
 import { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES } from './defaults';
 import './styles/gantt.css';
 import GanttRenderer from './ganttRenderer'; // New renderer class
+import { generate_id, sanitize } from './utils';
 
 export default class Gantt {
     constructor(wrapper, tasks, options) {
@@ -1782,11 +1783,3 @@ Gantt.VIEW_MODE = {
     MONTH: DEFAULT_VIEW_MODES[5],
     YEAR: DEFAULT_VIEW_MODES[6],
 };
-
-function generate_id(task) {
-    return task.name + '_' + Math.random().toString(36).slice(2, 12);
-}
-
-function sanitize(s) {
-    return s.replaceAll(' ', '_').replaceAll(':', '_').replaceAll('.', '_');
-}

@@ -2,6 +2,7 @@ import { createSVG } from './svg_utils';
 import date_utils from './date_utils';
 import Arrow from './arrow';
 import Bar from './bar';
+import { generate_id, sanitize } from './utils';
 
 export default class GanttRenderer {
     constructor(gantt) {
@@ -443,13 +444,5 @@ export default class GanttRenderer {
                 .filter(Boolean);
             this.gantt.arrows = this.gantt.arrows.concat(arrows);
         }
-    }
-
-    generate_id(task) {
-        return task.name + '_' + Math.random().toString(36).slice(2, 12);
-    }
-
-    sanitize(s) {
-        return s.replaceAll(' ', '_').replaceAll(':', '_').replaceAll('.', '_');
     }
 }
