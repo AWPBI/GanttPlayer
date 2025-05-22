@@ -6,6 +6,7 @@ import { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES } from './defaults';
 import './styles/gantt.css';
 import GanttRenderer from './ganttRenderer';
 import EventHandler from './eventHandler';
+import TaskManager from './taskManager';
 import { generate_id, sanitize } from './utils';
 
 export default class Gantt {
@@ -14,6 +15,7 @@ export default class Gantt {
         this.setup_options(options);
         this.eventQueueManager = new EventQueueManager(this);
         this.eventHandler = new EventHandler(this);
+        this.taskManager = new TaskManager(this);
         this.setup_tasks(tasks);
         this.renderer = new GanttRenderer(this);
         this.change_view_mode();
@@ -209,18 +211,8 @@ export default class Gantt {
                 return task;
             })
             .filter((t) => t);
-        this.setup_dependencies();
+        this.taskManager.setup_dependencies();
         this.scroll_to_latest_task();
-    }
-
-    setup_dependencies() {
-        this.dependency_map = {};
-        for (let t of this.tasks) {
-            for (let d of t.dependencies) {
-                this.dependency_map[d] = this.dependency_map[d] || [];
-                this.dependency_map[d].push(t.id);
-            }
-        }
     }
 
     refresh(tasks) {
@@ -231,9 +223,10 @@ export default class Gantt {
 
     update_task(id, new_details) {
         let task = this.tasks.find((t) => t.id === id);
-        let bar = this.bars[task._index];
+        let bar = this.bars.find((bar) => bar.task.id === id);
         Object.assign(task, new_details);
         bar.refresh();
+        this.taskManager.setup_dependencies();
     }
 
     change_view_mode(mode = this.options.view_mode, maintain_pos = false) {
@@ -1047,7 +1040,7 @@ export default class Gantt {
             if (this.options.move_dependencies) {
                 ids = [
                     parent_bar_id,
-                    ...this.get_all_dependent_tasks(parent_bar_id),
+                    ...this.taskManager.get_all_dependent_tasks(parent_bar_id),
                 ];
             } else {
                 ids = [parent_bar_id];
@@ -1258,24 +1251,6 @@ export default class Gantt {
                 bar.set_action_completed();
             });
         });
-
-        // Removed: bind_bar_progress (moved to EventHandler)
-    }
-
-    get_all_dependent_tasks(task_id) {
-        let out = [];
-        let to_process = [task_id];
-        while (to_process.length) {
-            const deps = to_process.reduce((acc, curr) => {
-                acc = acc.concat(this.dependency_map[curr] || []);
-                return acc;
-            }, []);
-
-            out = out.concat(deps);
-            to_process = deps.filter((d) => !to_process.includes(d));
-        }
-
-        return out.filter(Boolean);
     }
 
     unselect_all() {
@@ -1355,16 +1330,6 @@ export default class Gantt {
             this.$animated_ball_highlight = null;
         }
     }
-
-    // Removed methods (moved to EventHandler):
-    /*
-    bind_events() { ... }
-    bind_grid_click() { ... }
-    bind_holiday_labels() { ... }
-    bind_bar_progress() { ... }
-    get_snap_position(dx, ox) { ... }
-    get_ignored_region(pos, drn = 1) { ... }
-    */
 }
 
 Gantt.VIEW_MODE = {
