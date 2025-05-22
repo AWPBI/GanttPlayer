@@ -54,24 +54,39 @@ export default class Gantt {
             return;
         }
 
-        // Check if we've reached or passed the end date
+        // Ensure player_end_date is a Date object
+        const player_end_date = this.config.player_end_date
+            ? date_utils.parse(this.config.player_end_date, 'YYYY-MM-DD')
+            : null;
+
+        console.log(
+            'player_update: custom_marker_date=',
+            this.config.custom_marker_date,
+            'player_end_date=',
+            player_end_date,
+        );
+
         if (
-            this.config.player_end_date &&
-            this.config.custom_marker_date >= this.config.player_end_date
+            player_end_date &&
+            this.config.custom_marker_date >= player_end_date
         ) {
             console.log('player_update: reached player_end_date, stopping');
             this.handle_animation_end();
             return;
         }
 
-        // Increment custom marker date
+        const previous_date = new Date(this.config.custom_marker_date);
         this.config.custom_marker_date = date_utils.add(
             this.config.custom_marker_date,
             this.config.step,
             this.config.unit,
         );
 
-        // Calculate new position
+        console.log(
+            'player_update: advanced to custom_marker_date=',
+            this.config.custom_marker_date,
+        );
+
         const diff_in_units = date_utils.diff(
             this.config.custom_marker_date,
             this.gantt_start,
@@ -80,9 +95,7 @@ export default class Gantt {
         const newLeft =
             (diff_in_units / this.config.step) * this.config.column_width;
 
-        // Update animated highlight position
         if (this.$animated_highlight && this.$animated_ball_highlight) {
-            // Reset animation to start from new position
             this.$animated_highlight.style.left = `${newLeft}px`;
             this.$animated_ball_highlight.style.left = `${newLeft - 2}px`;
 
@@ -100,17 +113,35 @@ export default class Gantt {
                         '--move-distance',
                         `${moveDistance}px`,
                     );
-                    el.style.animation = `none`; // Reset animation
-                    el.offsetHeight; // Trigger reflow
+                    el.style.animation = `none`;
+                    el.offsetHeight;
                     el.style.animation = `moveRight ${animationDuration}s linear forwards`;
                     el.style.animationPlayState = 'running';
                 },
             );
         }
 
-        // Handle overlapping tasks by queuing events
         if (this.options.custom_marker) {
             const current_date = this.config.custom_marker_date;
+            // Check tasks starting or ending within [previous_date, current_date)
+            const tasks_in_step = this.tasks.filter(
+                (task) =>
+                    (task._start >= previous_date &&
+                        task._start < current_date) ||
+                    (task._end > previous_date && task._end <= current_date) ||
+                    (task._start <= current_date && current_date < task._end),
+            );
+
+            tasks_in_step.forEach((task) => {
+                if (!this.overlapping_tasks.has(task.id)) {
+                    console.log(
+                        `player_update: Queuing bar_enter for task ${task.id}`,
+                    );
+                    this.eventQueue.push({ event: 'bar_enter', task });
+                    this.overlapping_tasks.add(task.id);
+                }
+            });
+
             const new_overlapping = new Set(
                 this.tasks
                     .filter(
@@ -128,25 +159,23 @@ export default class Gantt {
                 (id) => !new_overlapping.has(id),
             );
 
-            // Queue enter events
             entered_tasks.forEach((id) => {
                 const task = this.get_task(id);
+                console.log(`player_update: Queuing bar_enter for task ${id}`);
                 this.eventQueue.push({ event: 'bar_enter', task });
             });
 
-            // Queue exit events
             exited_tasks.forEach((id) => {
                 const task = this.get_task(id);
+                console.log(`player_update: Queuing bar_exit for task ${id}`);
                 this.eventQueue.push({ event: 'bar_exit', task });
             });
 
             this.overlapping_tasks = new_overlapping;
-
-            // Process the queue
+            console.log('player_update: eventQueue=', this.eventQueue);
             this.processEventQueue();
         }
 
-        // Start smooth scrolling animation
         this.start_scroll_animation(newLeft);
     }
 
