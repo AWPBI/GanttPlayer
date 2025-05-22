@@ -1363,52 +1363,6 @@ export default class Gantt {
         const left = (diff / this.config.step) * this.config.column_width;
         this.play_animated_highlight(left, this.config.custom_marker_date);
 
-        // Immediately check for tasks overlapping or starting within the first step
-        if (this.options.custom_marker) {
-            const current_date = new Date(this.config.custom_marker_date);
-            const next_date = date_utils.add(
-                current_date,
-                this.config.step,
-                this.config.unit,
-            );
-            console.log(
-                'Checking overlaps from:',
-                current_date,
-                'to:',
-                next_date,
-            );
-            console.log('Tasks:', this.tasks.length);
-
-            const initial_overlapping = this.tasks.filter((task) => {
-                const isOverlapping =
-                    (task._start <= current_date && current_date < task._end) ||
-                    (task._start >= current_date && task._start < next_date) ||
-                    (task._end > current_date && task._end <= next_date);
-                console.log(
-                    `Task ${task.id}: start=${task._start}, end=${task._end}, overlapping=${isOverlapping}`,
-                );
-                return isOverlapping;
-            });
-
-            console.log(
-                'Initial overlapping tasks:',
-                initial_overlapping.length,
-            );
-            initial_overlapping.forEach((task) => {
-                console.log(`Queuing bar_enter for task ${task.id}`);
-                this.eventQueue.push({ event: 'bar_enter', task });
-            });
-
-            this.overlapping_tasks = new Set(
-                initial_overlapping.map((task) => task.id),
-            );
-            console.log('overlapping_tasks:', [...this.overlapping_tasks]);
-            console.log('eventQueue before process:', this.eventQueue);
-
-            // Force process the queue immediately
-            this.processEventQueue(true);
-        }
-
         this.trigger_event('reset', []);
     }
 
