@@ -1,12 +1,11 @@
 import date_utils from './date_utils';
 import { $, createSVG } from './svg_utils';
 import { EventQueueManager } from './eventQueueManager';
-import Arrow from './arrow';
-import Bar from './bar';
 import Popup from './popup';
 import { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES } from './defaults';
 import './styles/gantt.css';
-import GanttRenderer from './ganttRenderer'; // New renderer class
+import GanttRenderer from './ganttRenderer';
+import EventHandler from './eventHandler';
 import { generate_id, sanitize } from './utils';
 
 export default class Gantt {
@@ -14,10 +13,11 @@ export default class Gantt {
         this.setup_wrapper(wrapper);
         this.setup_options(options);
         this.eventQueueManager = new EventQueueManager(this);
+        this.eventHandler = new EventHandler(this);
         this.setup_tasks(tasks);
         this.renderer = new GanttRenderer(this);
         this.change_view_mode();
-        this.bind_events();
+        this.eventHandler.bind_events();
         this.scrollAnimationFrame = null;
     }
 
@@ -353,12 +353,6 @@ export default class Gantt {
             );
             this.dates.push(new Date(cur_date));
         }
-    }
-
-    bind_events() {
-        this.bind_grid_click();
-        this.bind_holiday_labels();
-        this.bind_bar_events();
     }
 
     render() {
@@ -1003,57 +997,6 @@ export default class Gantt {
         ];
     }
 
-    bind_grid_click() {
-        $.on(
-            this.$container,
-            'click',
-            '.grid-row, .grid-header, .ignored-bar, .holiday-highlight',
-            () => {
-                this.unselect_all();
-                this.hide_popup();
-            },
-        );
-    }
-
-    bind_holiday_labels() {
-        const $highlights =
-            this.$container.querySelectorAll('.holiday-highlight');
-        for (let h of $highlights) {
-            const label = this.$container.querySelector(
-                '.label_' + h.classList[1],
-            );
-            if (!label) continue;
-            let timeout;
-            h.onmouseenter = (e) => {
-                timeout = setTimeout(() => {
-                    label.classList.add('show');
-                    label.style.left = (e.offsetX || e.layerX) + 'px';
-                    label.style.top = (e.offsetY || e.layerY) + 'px';
-                }, 300);
-            };
-
-            h.onmouseleave = () => {
-                clearTimeout(timeout);
-                label.classList.remove('show');
-            };
-        }
-    }
-
-    get_start_end_positions() {
-        if (!this.bars.length) return [0, 0, 0];
-        let { x, width } = this.bars[0].group.getBBox();
-        let min_start = x;
-        let max_start = x;
-        let max_end = x + width;
-        for (let { group } of this.bars) {
-            let { x, width } = group.getBBox();
-            if (x < min_start) min_start = x;
-            if (x > max_start) max_start = x;
-            if (x + width > max_end) max_end = x + width;
-        }
-        return [min_start, max_start, max_end];
-    }
-
     bind_bar_events() {
         let is_dragging = false;
         let x_on_start = 0;
@@ -1266,7 +1209,7 @@ export default class Gantt {
 
             bars.forEach((bar) => {
                 const $bar = bar.$bar;
-                $bar.finaldx = this.get_snap_position(dx, $bar.ox);
+                $bar.finaldx = this.eventHandler.get_snap_position(dx, $bar.ox);
                 this.hide_popup();
                 if (is_resizing_left) {
                     if (parent_bar_id === bar.task.id) {
@@ -1316,92 +1259,7 @@ export default class Gantt {
             });
         });
 
-        this.bind_bar_progress();
-    }
-
-    bind_bar_progress() {
-        let x_on_start = 0;
-        let y_on_start = 0;
-        let is_resizing = false;
-        let bar = null;
-        let $bar_progress = null;
-        let $bar = null;
-
-        $.on(this.$svg, 'mousedown', '.handle.progress', (e, handle) => {
-            is_resizing = true;
-            x_on_start = e.offsetX || e.layerX;
-            y_on_start = e.offsetY || e.layerY;
-
-            const $bar_wrapper = $.closest('.bar-wrapper', handle);
-            const id = $bar_wrapper.getAttribute('data-id');
-            bar = this.get_bar(id);
-
-            $bar_progress = bar.$bar_progress;
-            $bar = bar.$bar;
-
-            $bar_progress.finaldx = 0;
-            $bar_progress.owidth = $bar_progress.getWidth();
-            $bar_progress.min_dx = -$bar_progress.owidth;
-            $bar_progress.max_dx = $bar.getWidth() - $bar_progress.getWidth();
-        });
-
-        const range_positions = this.config.ignored_positions.map((d) => [
-            d,
-            d + this.config.column_width,
-        ]);
-
-        $.on(this.$svg, 'mousemove', (e) => {
-            if (!is_resizing) return;
-            let now_x = e.offsetX || e.layerX;
-
-            let moving_right = now_x > x_on_start;
-            if (moving_right) {
-                let k = range_positions.find(
-                    ([begin, end]) => now_x >= begin && now_x < end,
-                );
-                while (k) {
-                    now_x = k[1];
-                    k = range_positions.find(
-                        ([begin, end]) => now_x >= begin && now_x < end,
-                    );
-                }
-            } else {
-                let k = range_positions.find(
-                    ([begin, end]) => now_x > begin && now_x <= end,
-                );
-                while (k) {
-                    now_x = k[0];
-                    k = range_positions.find(
-                        ([begin, end]) => now_x > begin && now_x <= end,
-                    );
-                }
-            }
-
-            let dx = now_x - x_on_start;
-            if (dx > $bar_progress.max_dx) {
-                dx = $bar_progress.max_dx;
-            }
-            if (dx < $bar_progress.min_dx) {
-                dx = $bar_progress.min_dx;
-            }
-
-            $bar_progress.setAttribute('width', $bar_progress.owidth + dx);
-            $.attr(bar.$handle_progress, 'cx', $bar_progress.getEndX());
-
-            $bar_progress.finaldx = dx;
-        });
-
-        $.on(this.$svg, 'mouseup', () => {
-            is_resizing = false;
-            if (!($bar_progress && $bar_progress.finaldx)) return;
-
-            $bar_progress.finaldx = 0;
-            bar.progress_changed();
-            bar.set_action_completed();
-            bar = null;
-            $bar_progress = null;
-            $bar = null;
-        });
+        // Removed: bind_bar_progress (moved to EventHandler)
     }
 
     get_all_dependent_tasks(task_id) {
@@ -1418,52 +1276,6 @@ export default class Gantt {
         }
 
         return out.filter(Boolean);
-    }
-
-    get_snap_position(dx, ox) {
-        let unit_length = 1;
-        const default_snap =
-            this.options.snap_at || this.config.view_mode.snap_at || '1d';
-
-        if (default_snap !== 'unit') {
-            const { duration, scale } = date_utils.parse_duration(default_snap);
-            unit_length =
-                date_utils.convert_scales(this.config.view_mode.step, scale) /
-                duration;
-        }
-
-        const rem = dx % (this.config.column_width / unit_length);
-
-        let final_dx =
-            dx -
-            rem +
-            (rem < (this.config.column_width / unit_length) * 0.5
-                ? 0
-                : this.config.column_width / unit_length);
-        let final_pos = ox + final_dx;
-
-        const drn = final_dx > 0 ? 1 : -1;
-        let ignored_regions = this.get_ignored_region(final_pos, drn);
-        while (ignored_regions.length) {
-            final_pos += this.config.column_width * drn;
-            ignored_regions = this.get_ignored_region(final_pos, drn);
-            if (!ignored_regions.length) {
-                final_pos -= this.config.column_width * drn;
-            }
-        }
-        return final_pos - ox;
-    }
-
-    get_ignored_region(pos, drn = 1) {
-        if (drn === 1) {
-            return this.config.ignored_positions.filter((val) => {
-                return pos > val && pos <= val + this.config.column_width;
-            });
-        } else {
-            return this.config.ignored_positions.filter(
-                (val) => pos >= val && pos < val + this.config.column_width,
-            );
-        }
     }
 
     unselect_all() {
@@ -1543,6 +1355,16 @@ export default class Gantt {
             this.$animated_ball_highlight = null;
         }
     }
+
+    // Removed methods (moved to EventHandler):
+    /*
+    bind_events() { ... }
+    bind_grid_click() { ... }
+    bind_holiday_labels() { ... }
+    bind_bar_progress() { ... }
+    get_snap_position(dx, ox) { ... }
+    get_ignored_region(pos, drn = 1) { ... }
+    */
 }
 
 Gantt.VIEW_MODE = {
