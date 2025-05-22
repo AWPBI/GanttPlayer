@@ -35,6 +35,16 @@ export default class Gantt {
             );
         }
 
+        // Validate view_mode.padding
+        if (
+            !Array.isArray(this.options.view_mode.padding) ||
+            !this.options.view_mode.padding.every(
+                (p) => typeof p === 'string' && p.trim(),
+            )
+        ) {
+            this.options.view_mode.padding = ['1 day', '1 day'];
+        }
+
         // Config for computed values, keeping column_width for Bar compatibility
         this.config = {
             step: 1,
@@ -167,6 +177,13 @@ export default class Gantt {
                     ? mode
                     : DEFAULT_VIEW_MODES.find((m) => m.name === 'DAY');
         }
+        // Validate view_mode.padding
+        if (
+            !Array.isArray(viewMode.padding) ||
+            !viewMode.padding.every((p) => typeof p === 'string' && p.trim())
+        ) {
+            viewMode.padding = ['1 day', '1 day'];
+        }
         this.options.view_mode = viewMode;
         this.updateViewScale();
         this.setupDates();
@@ -218,9 +235,15 @@ export default class Gantt {
                 const padding = Array.isArray(this.options.view_mode.padding)
                     ? this.options.view_mode.padding
                     : ['1 day', '1 day'];
-                let [padding_start, padding_end] = padding.map(
-                    date_utils.parse_duration,
-                );
+                let [padding_start, padding_end] = padding.map((p) => {
+                    const parsed = date_utils.parse_duration(p);
+                    return parsed &&
+                        typeof parsed === 'object' &&
+                        parsed.duration &&
+                        parsed.scale
+                        ? parsed
+                        : { duration: 1, scale: 'day' };
+                });
                 this.gantt_start = date_utils.add(
                     gantt_start,
                     -padding_start.duration,
