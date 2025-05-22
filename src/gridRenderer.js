@@ -97,15 +97,15 @@ export default class GridRenderer {
             $select.classList.add('viewmode-select');
             $select.innerHTML =
                 `<option selected disabled>Mode</option>` +
-                gantt.options.view_modes
-                    .map(
-                        (mode) =>
-                            `<option value="${mode.name}"${mode.name === gantt.config.view_mode.name ? ' selected' : ''}>${mode.name}</option>`,
-                    )
-                    .join('');
-            $select.addEventListener('change', () =>
-                gantt.changeViewMode($select.value, true),
-            );
+                // gantt.options.view_modes
+                //     .map(
+                //         (mode) =>
+                //             `<option value="${mode.name}"${mode.name === gantt.config.view_mode.name ? ' selected' : ''}>${mode.name}</option>`,
+                //     )
+                //     .join('');
+                $select.addEventListener('change', () =>
+                    gantt.changeViewMode($select.value, true),
+                );
             gantt.$sideHeader.appendChild($select);
         }
 
