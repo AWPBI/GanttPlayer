@@ -1,17 +1,17 @@
 import date_utils from './date_utils';
 import { $, createSVG } from './svg_utils';
-
 import Arrow from './arrow';
-import TaskManager from './taskManager';
-import GridRenderer from './gridRenderer';
+import Bar from './bar';
+import Popup from './popup';
+import { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES } from './defaults';
 import AnimationManager from './animationManager';
 import EventQueueManager from './eventQueueManager';
+import GridRenderer from './gridRenderer';
+import TaskManager from './taskManager';
 import EventBinder from './eventBinder';
 import PopupManager from './popupManager';
-
-import { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES } from './defaults';
-
 import './styles/gantt.css';
+import { generate_id, sanitize } from './utils'; // Assuming utility functions are in a separate file
 
 export default class Gantt {
     constructor(wrapper, tasks, options) {
@@ -30,7 +30,7 @@ export default class Gantt {
                 this.options.custom_marker_init_date || Date.now(),
             ),
             player_end_date: this.options.player_end_date
-                ? new Date(this.options.player_end_date)
+                ? date_utils.parse(this.options.player_end_date)
                 : null,
             view_mode: this.options.view_mode,
         };
@@ -105,7 +105,9 @@ export default class Gantt {
 
         if (this.options.ignore) {
             if (typeof this.options.ignore === 'string') {
-                this.config.ignored_dates.push(new Date(this.options.ignore));
+                this.config.ignored_dates.push(
+                    date_utils.parse(this.options.ignore),
+                );
             } else if (Array.isArray(this.options.ignore)) {
                 this.options.ignore.forEach((opt) => {
                     if (typeof opt === 'string') {
@@ -113,7 +115,10 @@ export default class Gantt {
                             this.config.ignored_function = (d) =>
                                 d.getDay() === 6 || d.getDay() === 0;
                         } else {
-                            this.config.ignored_dates.push(new Date(opt));
+                            const parsed = date_utils.parse(opt);
+                            if (parsed && !isNaN(parsed.getTime())) {
+                                this.config.ignored_dates.push(parsed);
+                            }
                         }
                     } else {
                         this.config.ignored_function = opt;
@@ -157,31 +162,29 @@ export default class Gantt {
 
     setupDates() {
         const tasks = this.taskManager.tasks;
-        this.gantt_start = tasks.length
-            ? tasks.reduce(
-                  (min, t) => (t._start < min ? t._start : min),
-                  tasks[0]._start,
-              )
-            : new Date();
-        this.gantt_end = tasks.length
-            ? tasks.reduce(
-                  (max, t) => (t._end > max ? t._end : max),
-                  tasks[0]._end,
-              )
-            : new Date();
+        let gantt_start, gantt_end;
 
-        this.gantt_start = date_utils.start_of(
-            this.gantt_start,
-            this.config.unit,
-        );
-        this.gantt_end = date_utils.start_of(this.gantt_end, this.config.unit);
+        if (tasks.length) {
+            gantt_start = tasks.reduce(
+                (min, t) => (t._start < min ? t._start : min),
+                tasks[0]._start,
+            );
+            gantt_end = tasks.reduce(
+                (max, t) => (t._end > max ? t._end : max),
+                tasks[0]._end,
+            );
+        } else {
+            // Fallback for empty task list
+            console.warn('No valid tasks; using current date as fallback');
+            gantt_start = new Date();
+            gantt_end = date_utils.add(gantt_start, 1, 'day');
+        }
 
-        this.gantt_start = date_utils.add(
-            this.gantt_start,
-            -1,
-            this.config.unit,
-        );
-        this.gantt_end = date_utils.add(this.gantt_end, 1, this.config.unit);
+        gantt_start = date_utils.start_of(gantt_start, this.config.unit);
+        gantt_end = date_utils.start_of(gantt_end, this.config.unit);
+
+        this.gantt_start = date_utils.add(gantt_start, -1, this.config.unit);
+        this.gantt_end = date_utils.add(gantt_end, 1, this.config.unit);
 
         this.dates = [this.gantt_start];
         let curDate = this.gantt_start;
@@ -397,6 +400,20 @@ export default class Gantt {
         this.popupManager.hide();
         this.animationManager.stopAnimations();
     }
+
+    show_popup(options) {
+        this.popupManager.show(options);
+    }
+
+    get_ignored_region(x) {
+        return this.config.ignored_positions.filter(
+            (pos) => pos >= x && pos < x + this.config.column_width,
+        );
+    }
+
+    create_el(options) {
+        return this.createElement(options);
+    }
 }
 
 Gantt.VIEW_MODE = {
@@ -408,11 +425,3 @@ Gantt.VIEW_MODE = {
     MONTH: DEFAULT_VIEW_MODES[5],
     YEAR: DEFAULT_VIEW_MODES[6],
 };
-
-function generate_id(task) {
-    return task.name + '_' + Math.random().toString(36).slice(2, 12);
-}
-
-function sanitize(s) {
-    return s.replaceAll(' ', '_').replaceAll(':', '_').replaceAll('.', '_');
-}
