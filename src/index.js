@@ -1201,15 +1201,31 @@ export default class Gantt {
 
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
-            // Immediately check for overlapping tasks
+            // Immediately check for tasks overlapping or starting within the first step
             if (this.options.custom_marker) {
                 const current_date = new Date(this.config.custom_marker_date);
-                console.log('Checking overlaps at:', current_date);
+                // Calculate the next date after one step
+                const next_date = date_utils.add(
+                    current_date,
+                    this.config.step,
+                    this.config.unit,
+                );
+                console.log(
+                    'Checking overlaps from:',
+                    current_date,
+                    'to:',
+                    next_date,
+                );
                 console.log('Tasks:', this.tasks.length);
 
                 const initial_overlapping = this.tasks.filter((task) => {
+                    // Task is active at current_date or starts/ends within [current_date, next_date)
                     const isOverlapping =
-                        task._start <= current_date && current_date < task._end;
+                        (task._start <= current_date &&
+                            current_date < task._end) ||
+                        (task._start >= current_date &&
+                            task._start < next_date) ||
+                        (task._end > current_date && task._end <= next_date);
                     console.log(
                         `Task ${task.id}: start=${task._start}, end=${task._end}, overlapping=${isOverlapping}`,
                     );
@@ -1232,7 +1248,7 @@ export default class Gantt {
                 console.log('eventQueue before process:', this.eventQueue);
 
                 // Force process the queue immediately
-                this.processEventQueue(true); // Force processing
+                this.processEventQueue(true);
             }
 
             // Start the player interval
@@ -1318,15 +1334,27 @@ export default class Gantt {
         const left = (diff / this.config.step) * this.config.column_width;
         this.play_animated_highlight(left, this.config.custom_marker_date);
 
-        // Immediately check for overlapping tasks
+        // Immediately check for tasks overlapping or starting within the first step
         if (this.options.custom_marker) {
             const current_date = new Date(this.config.custom_marker_date);
-            console.log('Checking overlaps at:', current_date);
+            const next_date = date_utils.add(
+                current_date,
+                this.config.step,
+                this.config.unit,
+            );
+            console.log(
+                'Checking overlaps from:',
+                current_date,
+                'to:',
+                next_date,
+            );
             console.log('Tasks:', this.tasks.length);
 
             const initial_overlapping = this.tasks.filter((task) => {
                 const isOverlapping =
-                    task._start <= current_date && current_date < task._end;
+                    (task._start <= current_date && current_date < task._end) ||
+                    (task._start >= current_date && task._start < next_date) ||
+                    (task._end > current_date && task._end <= next_date);
                 console.log(
                     `Task ${task.id}: start=${task._start}, end=${task._end}, overlapping=${isOverlapping}`,
                 );
@@ -1349,7 +1377,7 @@ export default class Gantt {
             console.log('eventQueue before process:', this.eventQueue);
 
             // Force process the queue immediately
-            this.processEventQueue(true); // Force processing
+            this.processEventQueue(true);
         }
 
         this.trigger_event('reset', []);
