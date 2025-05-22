@@ -147,6 +147,35 @@ export default class Gantt {
         this.start_scroll_animation(newLeft);
     }
 
+    initializeEventQueue() {
+        if (!this.options.custom_marker) return;
+
+        const current_date = this.config.custom_marker_date;
+        // Find tasks overlapping with the current custom_marker_date
+        const initial_overlapping = new Set(
+            this.tasks
+                .filter(
+                    (task) =>
+                        task._start <= current_date && current_date < task._end,
+                )
+                .map((task) => task.id),
+        );
+
+        // Queue bar_enter events for tasks that are already active
+        initial_overlapping.forEach((id) => {
+            if (!this.overlapping_tasks.has(id)) {
+                const task = this.get_task(id);
+                this.eventQueue.push({ event: 'bar_enter', task });
+            }
+        });
+
+        // Update overlapping_tasks to include initial overlaps
+        this.overlapping_tasks = initial_overlapping;
+
+        // Process the queue
+        this.processEventQueue();
+    }
+
     // Modified to ensure queue is processed before looping or stopping
     async handle_animation_end() {
         try {
@@ -206,7 +235,6 @@ export default class Gantt {
         }
     }
 
-    // Existing methods below remain unchanged (included for completeness)
     setup_wrapper(element) {
         let svg_element, wrapper_element;
 
@@ -1165,6 +1193,9 @@ export default class Gantt {
         }
         this.options.player_state = !this.options.player_state;
         if (this.options.player_state) {
+            // Initialize the event queue for the current custom_marker_date
+            this.initializeEventQueue();
+
             this.player_interval = setInterval(
                 this.player_update.bind(this),
                 this.options.player_interval || 1000,
@@ -1241,6 +1272,9 @@ export default class Gantt {
         );
         const left = (diff / this.config.step) * this.config.column_width;
         this.play_animated_highlight(left, this.config.custom_marker_date);
+
+        // Initialize the event queue for the reset custom_marker_date
+        this.initializeEventQueue();
 
         this.trigger_event('reset', []);
     }
