@@ -161,7 +161,7 @@ export class EventQueueManager {
             this.processEventQueue();
         }
 
-        this.gantt.start_scroll_animation(newLeft);
+        this.gantt.scrollManager.start_scroll_animation(newLeft);
     }
 
     initializeEventQueue() {
