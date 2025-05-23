@@ -15,6 +15,7 @@ import {
     getOldestStartingDate,
 } from './utils';
 import ScrollManager from './scrollManager';
+import ViewManager from './viewManager';
 
 export default class Gantt {
     constructor(wrapper, tasks, options) {
@@ -24,9 +25,10 @@ export default class Gantt {
         this.eventHandler = new EventHandler(this);
         this.taskManager = new TaskManager(this);
         this.scrollManager = new ScrollManager(this);
+        this.viewManager = new ViewManager(this);
         this.setup_tasks(tasks);
         this.renderer = new GanttRenderer(this);
-        this.change_view_mode();
+        this.viewManager.change_view_mode();
         this.eventHandler.bind_events();
         this.scrollManager.bind_scroll_events();
         this.scrollAnimationFrame = null;
@@ -142,7 +144,7 @@ export default class Gantt {
 
     update_options(options) {
         this.setup_options({ ...this.original_options, ...options });
-        this.change_view_mode(undefined, true);
+        this.viewManager.change_view_mode(undefined, true);
         clearInterval(this.player_interval);
     }
 
@@ -226,7 +228,7 @@ export default class Gantt {
 
     refresh(tasks) {
         this.setup_tasks(tasks);
-        this.change_view_mode();
+        this.viewManager.change_view_mode();
         this.scrollManager.scroll_to_latest_task();
     }
 
@@ -236,125 +238,6 @@ export default class Gantt {
         Object.assign(task, new_details);
         bar.refresh();
         this.taskManager.setup_dependencies();
-    }
-
-    change_view_mode(mode = this.options.view_mode, maintain_pos = false) {
-        if (typeof mode === 'string') {
-            mode = this.options.view_modes.find((d) => d.name === mode);
-        }
-        let old_pos, old_scroll_op;
-        if (maintain_pos) {
-            old_pos = this.$container.scrollLeft;
-            old_scroll_op = this.options.scroll_to;
-            this.options.scroll_to = null;
-        }
-        this.options.view_mode = mode.name;
-        this.config.view_mode = mode;
-        this.update_view_scale(mode);
-        this.setup_dates(maintain_pos);
-        this.render();
-        if (maintain_pos) {
-            this.$container.scrollLeft = old_pos;
-            this.options.scroll_to = old_scroll_op;
-        }
-        this.trigger_event('view_change', [mode]);
-    }
-
-    update_view_scale(mode) {
-        let { duration, scale } = date_utils.parse_duration(mode.step);
-        this.config.step = duration;
-        this.config.unit = scale;
-        this.config.column_width =
-            this.options.column_width || mode.column_width || 45;
-        this.$container.style.setProperty(
-            '--gv-column-width',
-            this.config.column_width + 'px',
-        );
-        this.config.header_height =
-            this.options.lower_header_height +
-            this.options.upper_header_height +
-            10;
-    }
-
-    setup_dates(refresh = false) {
-        this.setup_gantt_dates(refresh);
-        this.setup_date_values();
-    }
-
-    setup_gantt_dates(refresh) {
-        let gantt_start, gantt_end;
-        if (!this.tasks.length) {
-            gantt_start = new Date();
-            gantt_end = new Date();
-        } else {
-            gantt_start = this.tasks[0]._start;
-            gantt_end = this.tasks[0]._end;
-            for (let task of this.tasks) {
-                if (task._start < gantt_start) {
-                    gantt_start = task._start;
-                }
-                if (task._end > gantt_end) {
-                    gantt_end = task._end;
-                }
-            }
-        }
-
-        gantt_start = date_utils.start_of(gantt_start, this.config.unit);
-        gantt_end = date_utils.start_of(gantt_end, this.config.unit);
-
-        if (!refresh) {
-            if (!this.options.infinite_padding) {
-                if (typeof this.config.view_mode.padding === 'string') {
-                    this.config.view_mode.padding = [
-                        this.config.view_mode.padding,
-                        this.config.view_mode.padding,
-                    ];
-                }
-
-                let [padding_start, padding_end] =
-                    this.config.view_mode.padding.map(
-                        date_utils.parse_duration,
-                    );
-                this.gantt_start = date_utils.add(
-                    gantt_start,
-                    -padding_start.duration,
-                    padding_start.scale,
-                );
-                this.gantt_end = date_utils.add(
-                    gantt_end,
-                    padding_end.duration,
-                    padding_end.scale,
-                );
-            } else {
-                this.gantt_start = date_utils.add(
-                    gantt_start,
-                    -this.config.extend_by_units * 3,
-                    this.config.unit,
-                );
-                this.gantt_end = date_utils.add(
-                    gantt_end,
-                    this.config.extend_by_units * 3,
-                    this.config.unit,
-                );
-            }
-        }
-        this.config.date_format =
-            this.config.view_mode.date_format || this.options.date_format;
-        this.gantt_start.setHours(0, 0, 0, 0);
-    }
-
-    setup_date_values() {
-        let cur_date = new Date(this.gantt_start);
-        this.dates = [cur_date];
-
-        while (cur_date < this.gantt_end) {
-            cur_date = date_utils.add(
-                cur_date,
-                this.config.step,
-                this.config.unit,
-            );
-            this.dates.push(new Date(cur_date));
-        }
     }
 
     render() {
