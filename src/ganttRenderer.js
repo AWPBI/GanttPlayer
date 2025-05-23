@@ -433,7 +433,7 @@ export default class GanttRenderer {
     }
 
     highlight_current() {
-        const res = this.gantt.get_closest_date();
+        const res = this.gantt.scrollManager.get_closest_date();
         if (!res) return null;
 
         const [_, el] = res;
