@@ -333,7 +333,7 @@ export default class GanttRenderer {
             const left =
                 (diff / this.gantt.config.step) *
                 this.gantt.config.column_width;
-            this.gantt.play_animated_highlight(
+            this.render_animated_highlight(
                 left,
                 this.gantt.config.custom_marker_date,
             );
@@ -471,11 +471,10 @@ export default class GanttRenderer {
 
     render_animated_highlight(left, dateObj) {
         let adjustedLeft = left;
-        let adjustedDateObj = dateObj;
-        if (!dateObj || isNaN(left) || left === 0) {
-            adjustedDateObj =
-                this.gantt.config.custom_marker_date ||
-                new Date(this.gantt.gantt_start);
+        let adjustedDateObj = dateObj || this.gantt.config.custom_marker_date;
+
+        // Always calculate position based on custom_marker_date if available
+        if (adjustedDateObj) {
             adjustedLeft =
                 (date_utils.diff(
                     adjustedDateObj,
@@ -484,18 +483,30 @@ export default class GanttRenderer {
                 ) /
                     this.gantt.config.step) *
                 this.gantt.config.column_width;
+        } else {
+            adjustedDateObj = new Date(this.gantt.gantt_start);
+            adjustedLeft = 0;
         }
 
-        let gridHeight = this.gantt.grid_height || 1152;
+        let gridHeight = this.gantt.grid_height;
+        if (!gridHeight) {
+            // Fallback to calculate height if grid_height is not set
+            gridHeight = Math.max(
+                this.gantt.config.header_height +
+                    this.gantt.options.padding +
+                    (this.gantt.options.bar_height +
+                        this.gantt.options.padding) *
+                        this.gantt.tasks.length -
+                    10,
+                this.gantt.options.container_height !== 'auto'
+                    ? this.gantt.options.container_height
+                    : 0,
+            );
+        }
         const gridElement = this.gantt.$svg.querySelector('.grid-background');
         if (gridElement) {
             gridHeight =
                 parseFloat(gridElement.getAttribute('height')) || gridHeight;
-        } else {
-            console.warn(
-                'Grid element not found, using default height:',
-                gridHeight,
-            );
         }
 
         if (!this.gantt.$animated_highlight) {
