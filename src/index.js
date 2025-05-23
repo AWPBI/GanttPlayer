@@ -286,7 +286,8 @@ export default class Gantt {
 
     play_animated_highlight(left, dateObj) {
         const { left: adjustedLeft, dateObj: adjustedDateObj } =
-            this.renderer.render_animated_highlight(left, dateObj);
+            // this.renderer.render_animated_highlight(left, dateObj);
+            this.renderer.highlight_current();
 
         if (this.options.player_state) {
             let animationDuration =
