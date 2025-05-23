@@ -1,6 +1,6 @@
 import date_utils from './date_utils';
 import { $, createSVG, animateSVG } from './svg_utils';
-
+import { create_el } from './utils';
 export default class Bar {
     constructor(gantt, task) {
         this.set_defaults(gantt, task);
@@ -85,8 +85,8 @@ export default class Bar {
         this.compute_expected_progress();
         this.expected_progress_width =
             this.gantt.options.column_width *
-            this.duration *
-            (this.expected_progress / 100) || 0;
+                this.duration *
+                (this.expected_progress / 100) || 0;
     }
 
     draw() {
@@ -171,7 +171,7 @@ export default class Bar {
                 this.gantt.config.step) *
             this.gantt.config.column_width;
 
-        let $date_highlight = this.gantt.create_el({
+        let $date_highlight = create_el({
             classes: `date-range-highlight hide highlight-${this.task.id}`,
             width: this.width,
             left: x,
@@ -199,13 +199,13 @@ export default class Bar {
 
         progress_width += total_ignored_progress;
 
-        let ignored_regions = this.gantt.get_ignored_region(
+        let ignored_regions = this.gantt.eventHandler.get_ignored_region(
             this.x + progress_width,
         );
 
         while (ignored_regions.length) {
             progress_width += this.gantt.config.column_width;
-            ignored_regions = this.gantt.get_ignored_region(
+            ignored_regions = this.gantt.eventHandler.get_ignored_region(
                 this.x + progress_width,
             );
         }
@@ -399,12 +399,13 @@ export default class Bar {
         $.on(this.group, 'touchstart', (e) => {
             if (!tapedTwice) {
                 tapedTwice = true;
-                setTimeout(function () { tapedTwice = false; }, 300);
+                setTimeout(function () {
+                    tapedTwice = false;
+                }, 300);
                 return false;
             }
             e.preventDefault();
             //action on double tap goes below
-
 
             if (this.action_completed) {
                 // just finished a move action, wait for a few seconds
@@ -549,7 +550,7 @@ export default class Bar {
             this.gantt.config.ignored_positions.reduce((acc, val) => {
                 return acc + (val >= this.x && val <= progress_area);
             }, 0) *
-            this.gantt.config.column_width;
+                this.gantt.config.column_width;
         if (progress < 0) return 0;
         const total =
             this.$bar.getWidth() -
@@ -663,8 +664,8 @@ export default class Bar {
         this.$expected_bar_progress.setAttribute(
             'width',
             this.gantt.config.column_width *
-            this.actual_duration_raw *
-            (this.expected_progress / 100) || 0,
+                this.actual_duration_raw *
+                (this.expected_progress / 100) || 0,
         );
     }
 
