@@ -2,7 +2,7 @@ import { createSVG } from './svg_utils';
 import date_utils from './date_utils';
 import Arrow from './arrow';
 import Bar from './bar';
-import { generate_id, sanitize } from './utils';
+import { generate_id, sanitize, create_el } from './utils';
 
 export default class GanttRenderer {
     constructor(gantt) {
@@ -18,11 +18,11 @@ export default class GanttRenderer {
                 append_to: this.gantt.$svg,
             });
         }
-        this.gantt.$extras = this.gantt.create_el({
+        this.gantt.$extras = create_el({
             classes: 'extras',
             append_to: this.gantt.$container,
         });
-        this.gantt.$adjust = this.gantt.create_el({
+        this.gantt.$adjust = create_el({
             classes: 'adjust hide',
             append_to: this.gantt.$extras,
             type: 'button',
@@ -100,24 +100,24 @@ export default class GanttRenderer {
     }
 
     make_grid_header() {
-        this.gantt.$header = this.gantt.create_el({
+        this.gantt.$header = create_el({
             width: this.gantt.dates.length * this.gantt.config.column_width,
             classes: 'grid-header',
             append_to: this.gantt.$container,
         });
 
-        this.gantt.$upper_header = this.gantt.create_el({
+        this.gantt.$upper_header = create_el({
             classes: 'upper-header',
             append_to: this.gantt.$header,
         });
-        this.gantt.$lower_header = this.gantt.create_el({
+        this.gantt.$lower_header = create_el({
             classes: 'lower-header',
             append_to: this.gantt.$header,
         });
     }
 
     make_side_header() {
-        this.gantt.$side_header = this.gantt.create_el({
+        this.gantt.$side_header = create_el({
             classes: 'side-header',
         });
         this.gantt.$upper_header.prepend(this.gantt.$side_header);
@@ -407,7 +407,7 @@ export default class GanttRenderer {
                         .replace(' ', '_');
 
                     if (labels[d]) {
-                        let label = this.gantt.create_el({
+                        let label = create_el({
                             classes: 'holiday-label ' + 'label_' + d_formatted,
                             append_to: this.gantt.$extras,
                         });
@@ -451,14 +451,14 @@ export default class GanttRenderer {
             (diff_in_units / this.gantt.config.step) *
             this.gantt.config.column_width;
 
-        this.gantt.$current_highlight = this.gantt.create_el({
+        this.gantt.$current_highlight = create_el({
             top: this.gantt.config.header_height,
             left,
             height: this.gantt.grid_height - this.gantt.config.header_height,
             classes: 'current-highlight',
             append_to: this.gantt.$container,
         });
-        this.gantt.$current_ball_highlight = this.gantt.create_el({
+        this.gantt.$current_ball_highlight = create_el({
             top: this.gantt.config.header_height - 6,
             left: left - 2.5,
             width: 6,
@@ -499,7 +499,7 @@ export default class GanttRenderer {
         }
 
         if (!this.gantt.$animated_highlight) {
-            this.gantt.$animated_highlight = this.gantt.create_el({
+            this.gantt.$animated_highlight = create_el({
                 top: this.gantt.config.header_height,
                 left: adjustedLeft,
                 width: 2,
@@ -516,7 +516,7 @@ export default class GanttRenderer {
         }
 
         if (!this.gantt.$animated_ball_highlight) {
-            this.gantt.$animated_ball_highlight = this.gantt.create_el({
+            this.gantt.$animated_ball_highlight = create_el({
                 top: this.gantt.config.header_height - 6,
                 left: adjustedLeft - 2,
                 width: 6,
@@ -550,7 +550,7 @@ export default class GanttRenderer {
     make_dates() {
         this.get_dates_to_draw().forEach((date) => {
             if (date.lower_text) {
-                let $lower_text = this.gantt.create_el({
+                let $lower_text = create_el({
                     left: date.x,
                     top: date.lower_y,
                     classes: 'lower-text date_' + sanitize(date.formatted_date),
@@ -560,7 +560,7 @@ export default class GanttRenderer {
             }
 
             if (date.upper_text) {
-                let $upper_text = this.gantt.create_el({
+                let $upper_text = create_el({
                     left: date.x,
                     top: date.upper_y,
                     classes: 'upper-text',

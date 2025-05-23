@@ -7,7 +7,13 @@ import './styles/gantt.css';
 import GanttRenderer from './ganttRenderer';
 import EventHandler from './eventHandler';
 import TaskManager from './taskManager';
-import { generate_id, sanitize } from './utils';
+import {
+    generate_id,
+    sanitize,
+    create_el,
+    isViewMode,
+    getOldestStartingDate,
+} from './utils';
 
 export default class Gantt {
     constructor(wrapper, tasks, options) {
@@ -58,13 +64,13 @@ export default class Gantt {
             this.$svg.classList.add('gantt');
         }
 
-        this.$container = this.create_el({
+        this.$container = create_el({
             classes: 'gantt-container',
             append_to: this.$svg.parentElement,
         });
 
         this.$container.appendChild(this.$svg);
-        this.$popup_wrapper = this.create_el({
+        this.$popup_wrapper = create_el({
             classes: 'popup-wrapper',
             append_to: this.$container,
         });
@@ -571,31 +577,31 @@ export default class Gantt {
         this.trigger_event('reset', []);
     }
 
-    create_el({
-        left,
-        top,
-        width,
-        height,
-        id,
-        classes,
-        append_to,
-        type,
-        style,
-    }) {
-        let $el = document.createElement(type || 'div');
-        for (let cls of classes.split(' ')) {
-            if (cls) $el.classList.add(cls);
-        }
-        if (top !== undefined) $el.style.top = top + 'px';
-        if (left !== undefined) $el.style.left = left + 'px';
+    // create_el({
+    //     left,
+    //     top,
+    //     width,
+    //     height,
+    //     id,
+    //     classes,
+    //     append_to,
+    //     type,
+    //     style,
+    // }) {
+    //     let $el = document.createElement(type || 'div');
+    //     for (let cls of classes.split(' ')) {
+    //         if (cls) $el.classList.add(cls);
+    //     }
+    //     if (top !== undefined) $el.style.top = top + 'px';
+    //     if (left !== undefined) $el.style.left = left + 'px';
 
-        if (id) $el.id = id;
-        if (width) $el.style.width = width + 'px';
-        if (height) $el.style.height = height + 'px';
-        if (style) $el.style.cssText = style;
-        if (append_to) append_to.appendChild($el);
-        return $el;
-    }
+    //     if (id) $el.id = id;
+    //     if (width) $el.style.width = width + 'px';
+    //     if (height) $el.style.height = height + 'px';
+    //     if (style) $el.style.cssText = style;
+    //     if (append_to) append_to.appendChild($el);
+    //     return $el;
+    // }
 
     map_arrows_on_bars() {
         for (let bar of this.bars) {
@@ -1261,15 +1267,7 @@ export default class Gantt {
     }
 
     view_is(modes) {
-        if (typeof modes === 'string') {
-            return this.config.view_mode.name === modes;
-        }
-
-        if (Array.isArray(modes)) {
-            return modes.includes(this.config.view_mode.name);
-        }
-
-        return this.config.view_mode.name === modes.name;
+        return isViewMode(this.config.view_mode.name, modes);
     }
 
     get_task(id) {
@@ -1303,12 +1301,7 @@ export default class Gantt {
     }
 
     get_oldest_starting_date() {
-        if (!this.tasks.length) return new Date();
-        return this.tasks
-            .map((task) => task._start)
-            .reduce((prev_date, cur_date) =>
-                cur_date <= prev_date ? cur_date : prev_date,
-            );
+        return getOldestStartingDate(this.tasks);
     }
 
     clear() {

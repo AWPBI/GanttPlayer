@@ -1,5 +1,6 @@
 import date_utils from './date_utils';
 import { $, createSVG, animateSVG } from './svg_utils';
+import { create_el } from './utils';
 export default class Bar {
     constructor(gantt, task) {
         this.set_defaults(gantt, task);
@@ -170,7 +171,7 @@ export default class Bar {
                 this.gantt.config.step) *
             this.gantt.config.column_width;
 
-        let $date_highlight = this.gantt.create_el({
+        let $date_highlight = create_el({
             classes: `date-range-highlight hide highlight-${this.task.id}`,
             width: this.width,
             left: x,
