@@ -577,32 +577,6 @@ export default class Gantt {
         this.trigger_event('reset', []);
     }
 
-    // create_el({
-    //     left,
-    //     top,
-    //     width,
-    //     height,
-    //     id,
-    //     classes,
-    //     append_to,
-    //     type,
-    //     style,
-    // }) {
-    //     let $el = document.createElement(type || 'div');
-    //     for (let cls of classes.split(' ')) {
-    //         if (cls) $el.classList.add(cls);
-    //     }
-    //     if (top !== undefined) $el.style.top = top + 'px';
-    //     if (left !== undefined) $el.style.left = left + 'px';
-
-    //     if (id) $el.id = id;
-    //     if (width) $el.style.width = width + 'px';
-    //     if (height) $el.style.height = height + 'px';
-    //     if (style) $el.style.cssText = style;
-    //     if (append_to) append_to.appendChild($el);
-    //     return $el;
-    // }
-
     map_arrows_on_bars() {
         for (let bar of this.bars) {
             bar.arrows = this.arrows.filter((arrow) => {
@@ -1257,6 +1231,21 @@ export default class Gantt {
                 bar.set_action_completed();
             });
         });
+    }
+
+    get_start_end_positions() {
+        if (!this.bars.length) return [0, 0, 0];
+        let { x, width } = this.bars[0].group.getBBox();
+        let min_start = x;
+        let max_start = x;
+        let max_end = x + width;
+        for (let { group } of this.bars) {
+            let { x, width } = group.getBBox();
+            if (x < min_start) min_start = x;
+            if (x > max_start) max_start = x;
+            if (x + width > max_end) max_end = x + width;
+        }
+        return [min_start, max_start, max_end];
     }
 
     unselect_all() {
