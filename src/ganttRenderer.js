@@ -310,7 +310,7 @@ export default class GanttRenderer {
         if (this.gantt.options.custom_marker) {
             if (
                 !this.gantt.config.custom_marker_date ||
-                isNaN(this.gantt.config.custom_marker_date)
+                isNaN(this.gantt.config.custom_marker_date.getTime())
             ) {
                 this.gantt.config.custom_marker_date = new Date(
                     this.gantt.options.custom_marker_init_date ||
@@ -325,6 +325,18 @@ export default class GanttRenderer {
                     this.gantt.gantt_start,
                 );
             }
+            console.log(
+                'make_grid_highlights: custom_marker_date=',
+                this.gantt.config.custom_marker_date,
+                'gantt_start=',
+                this.gantt.gantt_start,
+                'column_width=',
+                this.gantt.config.column_width,
+                'step=',
+                this.gantt.config.step,
+                'unit=',
+                this.gantt.config.unit,
+            );
             const diff = date_utils.diff(
                 this.gantt.config.custom_marker_date,
                 this.gantt.gantt_start,
@@ -333,6 +345,7 @@ export default class GanttRenderer {
             const left =
                 (diff / this.gantt.config.step) *
                 this.gantt.config.column_width;
+            console.log('make_grid_highlights: calculated left=', left);
             this.render_animated_highlight(
                 left,
                 this.gantt.config.custom_marker_date,
@@ -470,11 +483,13 @@ export default class GanttRenderer {
     }
 
     render_animated_highlight(left, dateObj) {
-        let adjustedLeft = left;
         let adjustedDateObj = dateObj || this.gantt.config.custom_marker_date;
+        let adjustedLeft = left;
 
-        // Always calculate position based on custom_marker_date if available
-        if (adjustedDateObj) {
+        if (!adjustedDateObj || isNaN(adjustedDateObj.getTime())) {
+            adjustedDateObj = new Date(this.gantt.gantt_start);
+            adjustedLeft = 0;
+        } else {
             adjustedLeft =
                 (date_utils.diff(
                     adjustedDateObj,
@@ -483,14 +498,29 @@ export default class GanttRenderer {
                 ) /
                     this.gantt.config.step) *
                 this.gantt.config.column_width;
-        } else {
-            adjustedDateObj = new Date(this.gantt.gantt_start);
-            adjustedLeft = 0;
         }
+
+        console.log(
+            'render_animated_highlight: left=',
+            left,
+            'adjustedLeft=',
+            adjustedLeft,
+            'dateObj=',
+            dateObj,
+            'adjustedDateObj=',
+            adjustedDateObj,
+            'gantt_start=',
+            this.gantt.gantt_start,
+            'column_width=',
+            this.gantt.config.column_width,
+            'step=',
+            this.gantt.config.step,
+            'unit=',
+            this.gantt.config.unit,
+        );
 
         let gridHeight = this.gantt.grid_height;
         if (!gridHeight) {
-            // Fallback to calculate height if grid_height is not set
             gridHeight = Math.max(
                 this.gantt.config.header_height +
                     this.gantt.options.padding +
@@ -508,6 +538,7 @@ export default class GanttRenderer {
             gridHeight =
                 parseFloat(gridElement.getAttribute('height')) || gridHeight;
         }
+        console.log('render_animated_highlight: gridHeight=', gridHeight);
 
         if (!this.gantt.$animated_highlight) {
             this.gantt.$animated_highlight = create_el({
@@ -524,6 +555,8 @@ export default class GanttRenderer {
             this.gantt.$animated_highlight.style.height = `${
                 gridHeight - this.gantt.config.header_height
             }px`;
+            // Force DOM update
+            this.gantt.$animated_highlight.offsetHeight;
         }
 
         if (!this.gantt.$animated_ball_highlight) {
@@ -538,6 +571,8 @@ export default class GanttRenderer {
             });
         } else {
             this.gantt.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
+            // Force DOM update
+            this.gantt.$animated_ball_highlight.offsetHeight;
         }
 
         return {

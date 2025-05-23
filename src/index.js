@@ -260,6 +260,18 @@ export default class Gantt {
             ) {
                 this.config.custom_marker_date = new Date(this.gantt_start);
             }
+            console.log(
+                'render: custom_marker_date=',
+                this.config.custom_marker_date,
+                'gantt_start=',
+                this.gantt_start,
+                'gantt_end=',
+                this.gantt_end,
+                'dates.length=',
+                this.dates.length,
+                'column_width=',
+                this.config.column_width,
+            );
 
             this.clear();
             this.renderer.setup_layers();
@@ -272,6 +284,22 @@ export default class Gantt {
             this.renderer.set_dimensions();
             this.scrollManager.set_scroll_position(this.options.scroll_to);
             this.scrollManager.setUpperTexts(this.upperTexts);
+
+            // Reapply highlight to ensure correct position
+            if (this.options.custom_marker && this.config.custom_marker_date) {
+                const diff = date_utils.diff(
+                    this.config.custom_marker_date,
+                    this.gantt_start,
+                    this.config.unit,
+                );
+                const left =
+                    (diff / this.config.step) * this.config.column_width;
+                console.log('render: reapplying highlight with left=', left);
+                this.renderer.render_animated_highlight(
+                    left,
+                    this.config.custom_marker_date,
+                );
+            }
         } catch (error) {
             console.error('Error during render:', error);
         }
