@@ -143,7 +143,7 @@ export default class GanttRenderer {
             }
 
             $select.addEventListener('change', () => {
-                this.gantt.change_view_mode($select.value, true);
+                this.gantt.viewManager.change_view_mode($select.value, true);
             });
             this.gantt.$side_header.appendChild($select);
         }
