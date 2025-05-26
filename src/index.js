@@ -285,6 +285,10 @@ export default class Gantt {
             this.scrollManager.set_scroll_position(this.options.scroll_to);
             this.scrollManager.setUpperTexts(this.upperTexts);
 
+            // Preserve the current view mode
+            const currentViewMode = this.options.view_mode; // Store current view mode
+            this.viewManager.change_view_mode(currentViewMode, true); // Pass current view mode and maintain position
+
             // Reapply highlight to ensure correct position
             if (this.options.custom_marker && this.config.custom_marker_date) {
                 const diff = date_utils.diff(
@@ -490,6 +494,7 @@ export default class Gantt {
         this.play_animated_highlight(left, this.config.custom_marker_date);
 
         this.trigger_event('reset', []);
+        this.scrollManager.set_scroll_position('start');
     }
 
     map_arrows_on_bars() {
