@@ -56,10 +56,16 @@ export default class ViewManager {
     }
 
     setup_gantt_dates(refresh) {
+        console.log(
+            'setup_gantt_dates: view_mode=',
+            this.gantt.options.view_mode,
+            'refresh=',
+            refresh,
+        );
         let gantt_start, gantt_end;
         if (!this.gantt.tasks.length) {
-            gantt_start = new Date();
-            gantt_end = new Date();
+            gantt_start = date_utils.today();
+            gantt_end = date_utils.add(date_utils.today(), 1, 'year');
         } else {
             gantt_start = this.gantt.tasks[0]._start;
             gantt_end = this.gantt.tasks[0]._end;
@@ -99,6 +105,31 @@ export default class ViewManager {
                     padding_end.duration,
                     padding_end.scale,
                 );
+
+                // Additional padding for Year view to fill viewport
+                if (this.gantt.options.view_mode === 'Year') {
+                    const viewport_width =
+                        this.gantt.$container.clientWidth || 800;
+                    const column_width = this.gantt.config.column_width || 45;
+                    const min_columns = Math.ceil(
+                        viewport_width / column_width,
+                    );
+                    const current_years = Math.ceil(
+                        date_utils.diff(
+                            this.gantt.gantt_end,
+                            this.gantt.gantt_start,
+                            'year',
+                        ),
+                    );
+                    const years_needed = min_columns - current_years;
+                    if (years_needed > 0) {
+                        this.gantt.gantt_end = date_utils.add(
+                            this.gantt.gantt_end,
+                            years_needed,
+                            'year',
+                        );
+                    }
+                }
             } else {
                 this.gantt.gantt_start = date_utils.add(
                     gantt_start,
@@ -116,6 +147,13 @@ export default class ViewManager {
             this.gantt.config.view_mode.date_format ||
             this.gantt.options.date_format;
         this.gantt.gantt_start.setHours(0, 0, 0, 0);
+        this.gantt.gantt_end.setHours(0, 0, 0, 0);
+        console.log(
+            'setup_gantt_dates: gantt_start=',
+            this.gantt.gantt_start,
+            'gantt_end=',
+            this.gantt.gantt_end,
+        );
     }
 
     setup_date_values() {
