@@ -36,7 +36,8 @@ export default class ViewManager {
 
     update_view_scale(mode) {
         console.log('update_view_scale: mode=', mode.name, 'step=', mode.step);
-        let { duration, scale } = date_utils.parse_duration(mode.step);
+        console.log('test mode:', isViewMode(mode.name));
+        let { duration, scale } = date_utils.parse_duration('9y');
         this.gantt.config.step = duration;
         this.gantt.config.unit = scale;
         this.gantt.config.column_width =
