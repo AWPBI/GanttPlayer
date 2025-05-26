@@ -35,11 +35,26 @@ export default class ViewManager {
     }
 
     update_view_scale(mode) {
+        console.log('update_view_scale: mode=', mode.name, 'step=', mode.step);
         let { duration, scale } = date_utils.parse_duration(mode.step);
         this.gantt.config.step = duration;
         this.gantt.config.unit = scale;
-        this.gantt.config.column_width =
-            this.gantt.options.column_width || mode.column_width || 45;
+
+        // Set view-specific base column width
+        const base_column_widths = {
+            Day: 38,
+            Week: 140,
+            Month: 120,
+            Year: 200, // Larger for Year
+        };
+        const base_width = base_column_widths[mode.name] || 45;
+
+        // Adjust column_width to fill viewport
+        const viewport_width = this.gantt.$container.clientWidth || 800;
+        const target_columns = 10; // Target 10 columns for all modes
+        const min_column_width = viewport_width / target_columns;
+        this.gantt.config.column_width = Math.max(base_width, min_column_width);
+
         this.gantt.$container.style.setProperty(
             '--gv-column-width',
             this.gantt.config.column_width + 'px',
@@ -48,6 +63,14 @@ export default class ViewManager {
             this.gantt.options.lower_header_height +
             this.gantt.options.upper_header_height +
             10;
+        console.log(
+            'update_view_scale: column_width=',
+            this.gantt.config.column_width,
+            'step=',
+            this.gantt.config.step,
+            'unit=',
+            this.gantt.config.unit,
+        );
     }
 
     setup_dates(refresh = false) {
@@ -94,7 +117,10 @@ export default class ViewManager {
                 let [padding_start, padding_end] =
                     this.gantt.config.view_mode.padding.map(
                         date_utils.parse_duration,
-                    );
+                    ) || [
+                        { duration: 1, scale: this.gantt.config.unit },
+                        { duration: 1, scale: this.gantt.config.unit },
+                    ];
                 this.gantt.gantt_start = date_utils.add(
                     gantt_start,
                     -padding_start.duration,
@@ -106,39 +132,34 @@ export default class ViewManager {
                     padding_end.scale,
                 );
 
-                // Additional padding for Year view to fill viewport
-                if (this.gantt.options.view_mode === 'Year') {
-                    const viewport_width =
-                        this.gantt.$container.clientWidth || 800;
-                    const column_width = this.gantt.config.column_width || 45;
-                    const min_columns = Math.ceil(
-                        viewport_width / column_width,
+                // Ensure enough columns to fill viewport
+                const viewport_width = this.gantt.$container.clientWidth || 800;
+                const target_columns = 10; // Target 10 columns
+                const current_columns = Math.ceil(
+                    date_utils.diff(
+                        this.gantt.gantt_end,
+                        this.gantt.gantt_start,
+                        this.gantt.config.unit,
+                    ) / this.gantt.config.step,
+                );
+                const columns_needed = target_columns - current_columns;
+                if (columns_needed > 0) {
+                    this.gantt.gantt_end = date_utils.add(
+                        this.gantt.gantt_end,
+                        columns_needed * this.gantt.config.step,
+                        this.gantt.config.unit,
                     );
-                    const current_years = Math.ceil(
-                        date_utils.diff(
-                            this.gantt.gantt_end,
-                            this.gantt.gantt_start,
-                            'year',
-                        ),
-                    );
-                    const years_needed = min_columns - current_years;
-                    if (years_needed > 0) {
-                        this.gantt.gantt_end = date_utils.add(
-                            this.gantt.gantt_end,
-                            years_needed,
-                            'year',
-                        );
-                    }
                 }
             } else {
+                const extend_units = this.gantt.config.extend_by_units * 3;
                 this.gantt.gantt_start = date_utils.add(
                     gantt_start,
-                    -this.gantt.config.extend_by_units * 3,
+                    -extend_units,
                     this.gantt.config.unit,
                 );
                 this.gantt.gantt_end = date_utils.add(
                     gantt_end,
-                    this.gantt.config.extend_by_units * 3,
+                    extend_units,
                     this.gantt.config.unit,
                 );
             }
