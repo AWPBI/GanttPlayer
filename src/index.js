@@ -300,7 +300,6 @@ export default class Gantt {
                     this.config.custom_marker_date,
                 );
             }
-            this.reset_play();
         } catch (error) {
             console.error('Error during render:', error);
         }
