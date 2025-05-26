@@ -36,7 +36,7 @@ export default class ViewManager {
 
     update_view_scale(mode) {
         console.log('update_view_scale: mode=', mode.name, 'step=', mode.step);
-        let { duration, scale } = date_utils.parse_duration('9y');
+        let { duration, scale } = date_utils.parse_duration(mode.step);
         this.gantt.config.step = duration;
         this.gantt.config.unit = scale;
         this.gantt.config.column_width =
@@ -171,6 +171,17 @@ export default class ViewManager {
                 this.gantt.config.unit,
             );
             this.gantt.dates.push(new Date(cur_date));
+        }
+        if (cur_date > this.gantt.gantt_end) {
+            if (this.currentViewMode === 'Year') {
+                this.gantt.dates.push(
+                    date_utils.add(cur_date, 12, this.gantt.config.unit),
+                );
+            } else if (this.currentViewMode === 'Month') {
+                this.gantt.dates.push(
+                    date_utils.add(cur_date, 30, this.gantt.config.unit),
+                );
+            }
         }
     }
 }
