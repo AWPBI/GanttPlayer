@@ -144,7 +144,10 @@ export default class Gantt {
 
     update_options(options) {
         this.setup_options({ ...this.original_options, ...options });
-        this.viewManager.change_view_mode(undefined, true);
+        this.viewManager.change_view_mode(
+            this.viewManager.currentViewMode,
+            true,
+        );
         clearInterval(this.player_interval);
     }
 

@@ -4,31 +4,55 @@ import { isViewMode } from './utils';
 export default class ViewManager {
     constructor(gantt) {
         this.gantt = gantt;
+        this.currentViewMode = this.gantt.options.viewMode || 'Day';
     }
 
-    change_view_mode(
-        mode = this.gantt.options.view_mode,
-        maintain_pos = false,
-    ) {
+    change_view_mode(mode = this.currentViewMode, maintain_pos = false) {
+        console.log('change_view_mode:', {
+            mode: mode,
+            currentViewMode: this.currentViewMode,
+        });
         if (typeof mode === 'string') {
-            mode = this.gantt.options.view_modes.find((d) => d.name === mode);
+            mode = this.gantt.options.viewModes.find(
+                (d) => d.name === mode.name,
+            );
         }
+        if (!mode) {
+            console.warn(
+                'Invalid view mode, using currentViewMode:',
+                this.currentViewMode,
+            );
+            mode = this.currentViewMode;
+        }
+        if (typeof mode === 'string') {
+            mode = mode.name;
+        }
+
+        // Update stored view mode
+        this.currentViewMode = mode;
         let old_pos, old_scroll_op;
         if (maintain_pos) {
             old_pos = this.gantt.$container.scrollLeft;
             old_scroll_op = this.gantt.options.scroll_to;
             this.gantt.options.scroll_to = null;
         }
-        this.gantt.options.view_mode = mode.name;
-        this.gantt.config.view_mode = mode;
-        this.update_view_scale(mode);
+
+        this.gantt.options.view_mode = mode;
+        this.gantt.config.view_mode = this.gantt.options.viewModes.find(
+            (d) => d.name === mode,
+        );
+        this.update_view_scale(this.gantt.config.view_mode);
         this.setup_dates(maintain_pos);
         this.gantt.render();
         if (maintain_pos) {
             this.gantt.$container.scrollLeft = old_pos;
             this.gantt.options.scroll_to = old_scroll_op;
         }
-        this.gantt.trigger_event('view_change', [mode]);
+        this.gantt.trigger_event('view_change', [this.gantt.config.view_mode]);
+        console.log(
+            'change_view_mode: set currentViewMode to',
+            this.currentViewMode,
+        );
     }
 
     update_view_scale(mode) {
