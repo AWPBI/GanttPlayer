@@ -170,7 +170,7 @@ export default class ViewManager {
         if (this.gantt.options.view_mode === 'Year') {
             this.gantt.gantt_end = date_utils.add(
                 this.gantt.gantt_end,
-                10, // Pad 10 more years
+                16, // Pad 10 more years
                 'year',
             );
         } else if (this.gantt.options.view_mode === 'Month') {
@@ -210,16 +210,5 @@ export default class ViewManager {
             );
             this.gantt.dates.push(new Date(cur_date));
         }
-        // if (cur_date > this.gantt.gantt_end) {
-        //     if (this.currentViewMode === 'Year') {
-        //         this.gantt.dates.push(
-        //             date_utils.add(cur_date, 12, this.gantt.config.unit),
-        //         );
-        //     } else if (this.currentViewMode === 'Month') {
-        //         this.gantt.dates.push(
-        //             date_utils.add(cur_date, 30, this.gantt.config.unit),
-        //         );
-        //     }
-        // }
     }
 }
