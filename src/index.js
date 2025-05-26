@@ -82,6 +82,7 @@ export default class Gantt {
     }
 
     setup_options(options) {
+        console.log('setup_options:', options);
         this.original_options = options;
         this.options = { ...DEFAULT_OPTIONS, ...options };
         const CSS_VARIABLES = {
