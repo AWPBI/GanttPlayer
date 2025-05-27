@@ -117,6 +117,7 @@ const DEFAULT_OPTIONS = {
     date_format: 'YYYY-MM-DD HH:mm',
     upper_header_height: 45,
     lower_header_height: 30,
+    side_header_height: 30,
     snap_at: null,
     infinite_padding: true,
     holidays: { 'var(--g-weekend-highlight-color)': 'weekend' },
@@ -157,8 +158,8 @@ const DEFAULT_OPTIONS = {
     view_modes: DEFAULT_VIEW_MODES,
 
     custom_marker: true,
-    custom_marker_init_date: "2025-04-08T00:00:00Z",
-    player_end_date: "2025-04-17T00:00:00Z",
+    custom_marker_init_date: '2025-04-08T00:00:00Z',
+    player_end_date: '2025-04-17T00:00:00Z',
     player_button: true,
     player_interval: 1000,
     player_loop: true,
