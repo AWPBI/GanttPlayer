@@ -111,13 +111,14 @@ export default class ViewManager {
                 ];
             }
 
-            let [padding_start, padding_end] =
-                this.gantt.config.view_mode.padding.map(
-                    date_utils.parse_duration,
-                ) || [
-                    { duration: 0, scale: this.gantt.config.unit },
-                    { duration: 1, scale: this.gantt.config.unit },
-                ];
+            let [padding_start, padding_end] = [
+                { duration: 2, scale: 'day' }, // Fixed 2-day start padding
+                this.gantt.config.view_mode.padding[1]
+                    ? date_utils.parse_duration(
+                          this.gantt.config.view_mode.padding[1],
+                      )
+                    : { duration: 1, scale: this.gantt.config.unit },
+            ];
             console.log(
                 'setup_gantt_dates: padding:',
                 padding_start,
@@ -140,7 +141,10 @@ export default class ViewManager {
                 this.gantt.gantt_end,
             );
         } else {
-            const extend_units_start = 0; // Minimal start padding
+            const extend_units_start = date_utils.convert_scales(
+                '2d',
+                this.gantt.config.unit,
+            ); // 2 days in unit
             const extend_units_end = this.gantt.config.extend_by_units * 3 || 3;
             this.gantt.gantt_start = date_utils.add(
                 gantt_start,
