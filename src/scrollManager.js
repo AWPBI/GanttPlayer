@@ -63,6 +63,8 @@ export default class ScrollManager {
 
         $.on(this.gantt.$container, 'scroll', (e) => {
             const scrollLeft = e.currentTarget.scrollLeft;
+            // Sync header scroll
+            this.gantt.$header.scrollLeft = scrollLeft;
             const ids = this.gantt.bars.map(({ group }) =>
                 group.getAttribute('data-id'),
             );
@@ -71,20 +73,20 @@ export default class ScrollManager {
                 dx = scrollLeft - this.x_on_scroll_start;
             }
 
-            // Update positions of upper-text and lower-text elements
+            // Update text positions
             this.upperTexts.forEach((text) => {
                 const initialLeft = parseFloat(
                     text.dataset.initialLeft || text.style.left || 0,
                 );
                 text.style.left = `${initialLeft - scrollLeft}px`;
-                text.dataset.initialLeft = initialLeft; // Ensure initialLeft is preserved
+                text.dataset.initialLeft = initialLeft;
             });
             this.lowerTexts.forEach((text) => {
                 const initialLeft = parseFloat(
                     text.dataset.initialLeft || text.style.left || 0,
                 );
                 text.style.left = `${initialLeft - scrollLeft}px`;
-                text.dataset.initialLeft = initialLeft; // Ensure initialLeft is preserved
+                text.dataset.initialLeft = initialLeft;
             });
 
             this.gantt.current_date = date_utils.add(

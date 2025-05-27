@@ -582,12 +582,12 @@ export default class GanttRenderer {
 
         if (!this.gantt.$animated_ball_highlight) {
             this.gantt.$animated_ball_highlight = create_el({
-                top: this.gantt.config.header_height + side_header_height,
+                top: this.gantt.config.header_height,
                 left: adjustedLeft, // Align with animated-highlight
                 width: 6,
                 height: 6,
                 classes: 'animated-ball-highlight',
-                append_to: this.gantt.$header, // Same container
+                append_to: this.gantt.$header,
                 style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001; transform: translateX(-50%);', // Center visually
             });
         } else {
