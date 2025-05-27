@@ -79,32 +79,8 @@ export class EventQueueManager {
             (diff_in_units / this.gantt.config.step) *
             this.gantt.config.column_width;
 
-        if (
-            this.gantt.$animated_highlight &&
-            this.gantt.$animated_ball_highlight
-        ) {
-            this.gantt.$animated_highlight.style.left = `${newLeft}px`;
-            this.gantt.$animated_ball_highlight.style.left = `${newLeft - 2}px`;
-
-            const animationDuration =
-                (this.gantt.options.player_interval || 1000) / 1000;
-            const moveDistance = this.gantt.config.column_width;
-
-            [
-                this.gantt.$animated_highlight,
-                this.gantt.$animated_ball_highlight,
-            ].forEach((el) => {
-                el.style.setProperty(
-                    '--animation-duration',
-                    `${animationDuration}s`,
-                );
-                el.style.setProperty('--move-distance', `${moveDistance}px`);
-                el.style.animation = `none`;
-                el.offsetHeight;
-                el.style.animation = `moveRight ${animationDuration}s linear forwards`;
-                el.style.animationPlayState = 'running';
-            });
-        }
+        // Trigger scroll animation to handle positioning
+        this.gantt.scrollManager.start_scroll_animation(newLeft);
 
         if (this.gantt.options.custom_marker) {
             const current_date = this.gantt.config.custom_marker_date;
@@ -160,8 +136,6 @@ export class EventQueueManager {
             console.log('player_update: eventQueue=', this.eventQueue);
             this.processEventQueue();
         }
-
-        this.gantt.scrollManager.start_scroll_animation(newLeft);
     }
 
     initializeEventQueue() {

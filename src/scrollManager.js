@@ -7,7 +7,7 @@ export default class ScrollManager {
         this.gantt = gantt;
         this.x_on_scroll_start = 0;
         this.upperTexts = [];
-        this.lowerTexts = []; // Add lower texts
+        this.lowerTexts = [];
     }
 
     setUpperTexts(upperTexts) {
@@ -15,7 +15,7 @@ export default class ScrollManager {
     }
 
     setLowerTexts(lowerTexts) {
-        this.lowerTexts = lowerTexts; // Store lower texts
+        this.lowerTexts = lowerTexts;
     }
 
     bind_scroll_events() {
@@ -71,20 +71,20 @@ export default class ScrollManager {
                 dx = scrollLeft - this.x_on_scroll_start;
             }
 
-            // Update positions of upper-text and lower-text elements
+            // Update text positions
             this.upperTexts.forEach((text) => {
                 const initialLeft = parseFloat(
                     text.dataset.initialLeft || text.style.left || 0,
                 );
                 text.style.left = `${initialLeft - scrollLeft}px`;
-                text.dataset.initialLeft = initialLeft; // Ensure initialLeft is preserved
+                text.dataset.initialLeft = initialLeft;
             });
             this.lowerTexts.forEach((text) => {
                 const initialLeft = parseFloat(
                     text.dataset.initialLeft || text.style.left || 0,
                 );
                 text.style.left = `${initialLeft - scrollLeft}px`;
-                text.dataset.initialLeft = initialLeft; // Ensure initialLeft is preserved
+                text.dataset.initialLeft = initialLeft;
             });
 
             this.gantt.current_date = date_utils.add(
@@ -170,7 +170,6 @@ export default class ScrollManager {
         });
     }
 
-    // Rest of the methods remain unchanged
     set_scroll_position(date) {
         if (
             this.gantt.options.infinite_padding &&
@@ -361,7 +360,7 @@ export default class ScrollManager {
             targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
             container.scrollLeft = targetScroll;
 
-            // Update text positions during animation
+            // Update text and highlight positions during animation
             this.upperTexts.forEach((text) => {
                 const initialLeft = parseFloat(
                     text.dataset.initialLeft || text.style.left || 0,
@@ -372,8 +371,14 @@ export default class ScrollManager {
                 const initialLeft = parseFloat(
                     text.dataset.initialLeft || text.style.left || 0,
                 );
-                // text.style.left = `${initialLeft - targetScroll}px`;
+                text.style.left = `${initialLeft - targetScroll}px`;
             });
+            if (this.gantt.$animated_highlight) {
+                this.gantt.$animated_highlight.style.left = `${currentLeft}px`;
+            }
+            if (this.gantt.$animated_ball_highlight) {
+                this.gantt.$animated_ball_highlight.style.left = `${currentLeft}px`; // No -2 offset
+            }
 
             if (this.gantt.tasks.length) {
                 const currentDate = this.gantt.config.custom_marker_date;
