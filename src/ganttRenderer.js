@@ -33,8 +33,9 @@ export default class GanttRenderer {
     make_grid() {
         this.make_grid_background();
         this.make_grid_rows();
-        this.make_side_header();
+
         this.make_grid_header();
+        this.make_side_header();
     }
 
     make_grid_extras() {
@@ -614,13 +615,15 @@ export default class GanttRenderer {
     }
 
     make_dates() {
+        const side_header_height = this.gantt.options.side_header_height || 30;
         this.get_dates_to_draw().forEach((date) => {
             if (date.lower_text) {
                 let $lower_text = create_el({
                     left: date.x,
-                    top: date.lower_y,
+                    top: date.lower_y + side_header_height,
                     classes: 'lower-text date_' + sanitize(date.formatted_date),
                     append_to: this.gantt.$lower_header,
+                    dataset: { initialLeft: date.x }, // Store initial left position
                 });
                 $lower_text.innerText = date.lower_text;
             }
@@ -628,15 +631,19 @@ export default class GanttRenderer {
             if (date.upper_text) {
                 let $upper_text = create_el({
                     left: date.x,
-                    top: date.upper_y,
+                    top: date.upper_y + side_header_height,
                     classes: 'upper-text',
                     append_to: this.gantt.$upper_header,
+                    dataset: { initialLeft: date.x }, // Store initial left position
                 });
                 $upper_text.innerText = date.upper_text;
             }
         });
         this.gantt.upperTexts = Array.from(
             this.gantt.$container.querySelectorAll('.upper-text'),
+        );
+        this.gantt.lowerTexts = Array.from(
+            this.gantt.$container.querySelectorAll('.lower-text'),
         );
     }
 

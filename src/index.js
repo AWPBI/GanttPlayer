@@ -289,6 +289,7 @@ export default class Gantt {
             this.renderer.set_dimensions();
             this.scrollManager.set_scroll_position(this.options.scroll_to);
             this.scrollManager.setUpperTexts(this.upperTexts);
+            this.scrollManager.setLowerTexts(this.lowerTexts);
 
             // Reapply highlight to ensure correct position
             if (this.options.custom_marker && this.config.custom_marker_date) {

@@ -7,6 +7,15 @@ export default class ScrollManager {
         this.gantt = gantt;
         this.x_on_scroll_start = 0;
         this.upperTexts = [];
+        this.lowerTexts = []; // Add lower texts
+    }
+
+    setUpperTexts(upperTexts) {
+        this.upperTexts = upperTexts;
+    }
+
+    setLowerTexts(lowerTexts) {
+        this.lowerTexts = lowerTexts; // Store lower texts
     }
 
     bind_scroll_events() {
@@ -53,17 +62,34 @@ export default class ScrollManager {
         }
 
         $.on(this.gantt.$container, 'scroll', (e) => {
+            const scrollLeft = e.currentTarget.scrollLeft;
             const ids = this.gantt.bars.map(({ group }) =>
                 group.getAttribute('data-id'),
             );
             let dx;
             if (this.x_on_scroll_start) {
-                dx = e.currentTarget.scrollLeft - this.x_on_scroll_start;
+                dx = scrollLeft - this.x_on_scroll_start;
             }
+
+            // Update positions of upper-text and lower-text elements
+            this.upperTexts.forEach((text) => {
+                const initialLeft = parseFloat(
+                    text.dataset.initialLeft || text.style.left || 0,
+                );
+                text.style.left = `${initialLeft - scrollLeft}px`;
+                text.dataset.initialLeft = initialLeft; // Ensure initialLeft is preserved
+            });
+            this.lowerTexts.forEach((text) => {
+                const initialLeft = parseFloat(
+                    text.dataset.initialLeft || text.style.left || 0,
+                );
+                text.style.left = `${initialLeft - scrollLeft}px`;
+                text.dataset.initialLeft = initialLeft; // Ensure initialLeft is preserved
+            });
 
             this.gantt.current_date = date_utils.add(
                 this.gantt.gantt_start,
-                (e.currentTarget.scrollLeft / this.gantt.config.column_width) *
+                (scrollLeft / this.gantt.config.column_width) *
                     this.gantt.config.step,
                 this.gantt.config.unit,
             );
@@ -79,7 +105,7 @@ export default class ScrollManager {
 
             this.gantt.current_date = date_utils.add(
                 this.gantt.gantt_start,
-                ((e.currentTarget.scrollLeft + ($el ? $el.clientWidth : 0)) /
+                ((scrollLeft + ($el ? $el.clientWidth : 0)) /
                     this.gantt.config.column_width) *
                     this.gantt.config.step,
                 this.gantt.config.unit,
@@ -103,11 +129,11 @@ export default class ScrollManager {
                 }
             }
 
-            this.x_on_scroll_start = e.currentTarget.scrollLeft;
+            this.x_on_scroll_start = scrollLeft;
             let [min_start, max_start, max_end] =
                 this.gantt.get_start_end_positions();
 
-            if (this.x_on_scroll_start > max_end + 100) {
+            if (scrollLeft > max_end + 100) {
                 this.gantt.$adjust.innerHTML = '←';
                 this.gantt.$adjust.classList.remove('hide');
                 this.gantt.$adjust.onclick = () => {
@@ -117,7 +143,7 @@ export default class ScrollManager {
                     });
                 };
             } else if (
-                this.x_on_scroll_start + e.currentTarget.offsetWidth <
+                scrollLeft + e.currentTarget.offsetWidth <
                 min_start - 100
             ) {
                 this.gantt.$adjust.innerHTML = '→';
@@ -137,13 +163,14 @@ export default class ScrollManager {
                 localBars.forEach((bar) => {
                     bar.update_label_position_on_horizontal_scroll({
                         x: dx,
-                        sx: e.currentTarget.scrollLeft,
+                        sx: scrollLeft,
                     });
                 });
             }
         });
     }
 
+    // Rest of the methods remain unchanged
     set_scroll_position(date) {
         if (
             this.gantt.options.infinite_padding &&
@@ -333,6 +360,20 @@ export default class ScrollManager {
             let targetScroll = currentLeft - offset;
             targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
             container.scrollLeft = targetScroll;
+
+            // Update text positions during animation
+            this.upperTexts.forEach((text) => {
+                const initialLeft = parseFloat(
+                    text.dataset.initialLeft || text.style.left || 0,
+                );
+                text.style.left = `${initialLeft - targetScroll}px`;
+            });
+            this.lowerTexts.forEach((text) => {
+                const initialLeft = parseFloat(
+                    text.dataset.initialLeft || text.style.left || 0,
+                );
+                text.style.left = `${initialLeft - targetScroll}px`;
+            });
 
             if (this.gantt.tasks.length) {
                 const currentDate = this.gantt.config.custom_marker_date;
@@ -531,9 +572,5 @@ export default class ScrollManager {
             ),
             el,
         ];
-    }
-
-    setUpperTexts(upperTexts) {
-        this.upperTexts = upperTexts;
     }
 }
