@@ -588,7 +588,7 @@ export default class GanttRenderer {
                 width: 6,
                 height: 6,
                 classes: 'animated-ball-highlight',
-                append_to: this.gantt.$container,
+                append_to: this.gantt.$header,
                 style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
             });
         } else {
