@@ -1,6 +1,6 @@
 import date_utils from './date_utils';
 import { $, createSVG, animateSVG } from './svg_utils';
-
+import { create_el } from './utils';
 export default class Bar {
     constructor(gantt, task) {
         this.set_defaults(gantt, task);
@@ -161,7 +161,7 @@ export default class Bar {
             append_to: this.bar_group,
         });
         if (this.task.color_progress)
-            this.$bar_progress.style.fill = this.task.color;
+            this.$bar_progress.style.fill = this.task.color_progress;
         const x =
             (date_utils.diff(
                 this.task._start,
@@ -171,7 +171,7 @@ export default class Bar {
                 this.gantt.config.step) *
             this.gantt.config.column_width;
 
-        let $date_highlight = this.gantt.create_el({
+        let $date_highlight = create_el({
             classes: `date-range-highlight hide highlight-${this.task.id}`,
             width: this.width,
             left: x,
@@ -199,13 +199,13 @@ export default class Bar {
 
         progress_width += total_ignored_progress;
 
-        let ignored_regions = this.gantt.get_ignored_region(
+        let ignored_regions = this.gantt.eventHandler.get_ignored_region(
             this.x + progress_width,
         );
 
         while (ignored_regions.length) {
             progress_width += this.gantt.config.column_width;
-            ignored_regions = this.gantt.get_ignored_region(
+            ignored_regions = this.gantt.eventHandler.get_ignored_region(
                 this.x + progress_width,
             );
         }
@@ -385,6 +385,28 @@ export default class Bar {
         });
 
         $.on(this.group, 'dblclick', (e) => {
+            if (this.action_completed) {
+                // just finished a move action, wait for a few seconds
+                return;
+            }
+            this.group.classList.remove('active');
+            if (this.gantt.popup)
+                this.gantt.popup.parent.classList.remove('hide');
+
+            this.gantt.trigger_event('double_click', [this.task]);
+        });
+        let tapedTwice = false;
+        $.on(this.group, 'touchstart', (e) => {
+            if (!tapedTwice) {
+                tapedTwice = true;
+                setTimeout(function () {
+                    tapedTwice = false;
+                }, 300);
+                return false;
+            }
+            e.preventDefault();
+            //action on double tap goes below
+
             if (this.action_completed) {
                 // just finished a move action, wait for a few seconds
                 return;

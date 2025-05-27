@@ -1,3 +1,4 @@
+import { create_el } from './utils.js';
 export default class Popup {
     constructor(parent, popup_func, gantt) {
         this.parent = parent;
@@ -34,7 +35,7 @@ export default class Popup {
             get_details: () => this.details,
             set_details: (details) => (this.details.innerHTML = details),
             add_action: (html, func) => {
-                let action = this.gantt.create_el({
+                let action = create_el({
                     classes: 'action-btn',
                     type: 'button',
                     append_to: this.actions,

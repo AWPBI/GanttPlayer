@@ -149,12 +149,20 @@ const DEFAULT_OPTIONS = {
     readonly_progress: false,
     readonly_dates: false,
     readonly: false,
-    scroll_to: 'today',
+    scroll_to: 'custom',
     show_expected_progress: false,
     today_button: true,
     view_mode: 'Day',
     view_mode_select: false,
     view_modes: DEFAULT_VIEW_MODES,
+
+    custom_marker: true,
+    custom_marker_init_date: "2025-04-08T00:00:00Z",
+    player_end_date: "2025-04-17T00:00:00Z",
+    player_button: true,
+    player_interval: 1000,
+    player_loop: true,
+    player_use_fa: true,
 };
 
 export { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES };

@@ -5,7 +5,7 @@
     position: relative;
     overflow: auto;
     font-size: 12px;
-    height: var(--gv-grid-height);
+    height: calc(var(--gv-grid-height) + 17px);
     width: 100%;
     border-radius: 8px;
 
@@ -141,7 +141,6 @@
         transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
         transition-duration: 150ms;
         background-color: var(--g-actions-background);
-        text-align: -webkit-center;
         border-radius: 0.5rem;
         border: none;
         padding: 5px 8px;
@@ -163,8 +162,12 @@
     }
 
     & .side-header select {
-        padding-right: 1.25rem;
-        width: 50px;
+        width: 60px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+    }
+    & .side-header select:focus {
+        outline: none;
     }
 
     & .date-range-highlight {
@@ -185,6 +188,20 @@
     & .current-ball-highlight {
         position: absolute;
         background: var(--g-today-highlight);
+        z-index: 1001;
+        border-radius: 50%;
+    }
+
+    & .custom-highlight {
+        position: absolute;
+        background: var(--g-custom-highlight);
+        width: 1px;
+        z-index: 999;
+    }
+
+    & .custom-ball-highlight {
+        position: absolute;
+        background: var(--g-custom-highlight);
         z-index: 1001;
         border-radius: 50%;
     }
