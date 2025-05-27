@@ -620,7 +620,7 @@ export default class GanttRenderer {
             if (date.lower_text) {
                 let $lower_text = create_el({
                     left: date.x,
-                    top: date.lower_y + side_header_height,
+                    top: date.lower_y,
                     classes: 'lower-text date_' + sanitize(date.formatted_date),
                     append_to: this.gantt.$lower_header,
                     dataset: { initialLeft: date.x }, // Store initial left position
@@ -631,7 +631,7 @@ export default class GanttRenderer {
             if (date.upper_text) {
                 let $upper_text = create_el({
                     left: date.x,
-                    top: date.upper_y + side_header_height,
+                    top: date.upper_y,
                     classes: 'upper-text',
                     append_to: this.gantt.$upper_header,
                     dataset: { initialLeft: date.x }, // Store initial left position
