@@ -372,7 +372,7 @@ export default class ScrollManager {
                 const initialLeft = parseFloat(
                     text.dataset.initialLeft || text.style.left || 0,
                 );
-                text.style.left = `${initialLeft - targetScroll}px`;
+                // text.style.left = `${initialLeft - targetScroll}px`;
             });
 
             if (this.gantt.tasks.length) {
