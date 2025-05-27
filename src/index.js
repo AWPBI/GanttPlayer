@@ -323,71 +323,25 @@ export default class Gantt {
             this.renderer.render_animated_highlight(left, dateObj);
 
         if (this.options.player_state) {
-            let animationDuration =
-                (this.options.player_interval || 1000) / 1000;
-            let moveDistance = this.config.column_width;
-
-            if (
-                this.config.player_end_date &&
-                adjustedDateObj >= this.config.player_end_date
-            ) {
-                return {
-                    left: adjustedLeft,
-                    dateObj: adjustedDateObj,
-                };
-            } else if (
-                this.config.player_end_date &&
-                date_utils.add(
-                    adjustedDateObj,
-                    this.config.step,
-                    this.config.unit,
-                ) > this.config.player_end_date
-            ) {
-                const remainingTime = date_utils.diff(
-                    this.config.player_end_date,
-                    adjustedDateObj,
-                    'millisecond',
-                );
-                animationDuration =
-                    remainingTime / (this.options.player_interval || 1000);
-                const totalUnits = date_utils.diff(
-                    this.config.player_end_date,
-                    this.gantt_start,
-                    this.config.unit,
-                );
-                const endLeft =
-                    (totalUnits / this.config.step) * this.config.column_width;
-                moveDistance = endLeft - adjustedLeft;
-            }
-
-            // Apply animation only to animated-highlight
+            // Ensure elements are positioned correctly
             if (this.$animated_highlight) {
-                if (
-                    this.$animated_highlight.style.animationPlayState ===
-                    'running'
-                )
-                    return;
-                this.$animated_highlight.style.setProperty(
-                    '--animation-duration',
-                    `${animationDuration}s`,
-                );
-                this.$animated_highlight.style.setProperty(
-                    '--move-distance',
-                    `${moveDistance}px`,
-                );
-                this.$animated_highlight.style.animation = 'none';
-                this.$animated_highlight.offsetHeight;
-                this.$animated_highlight.style.animation = `moveRight ${animationDuration}s linear forwards`;
-                this.$animated_highlight.style.animationPlayState = 'running';
+                this.$animated_highlight.style.animation = 'none'; // Remove CSS animation
+                this.$animated_highlight.style.left = `${adjustedLeft}px`;
+            }
+            if (this.$animated_ball_highlight) {
+                this.$animated_ball_highlight.style.animation = 'none'; // Remove CSS animation
+                this.$animated_ball_highlight.style.left = `${adjustedLeft}px`;
             }
 
-            // Trigger scroll update to follow animation
-            this.scrollManager.scroll_to_position(adjustedLeft);
+            // Trigger scroll animation to handle movement
+            this.scrollManager.start_scroll_animation(adjustedLeft);
         } else {
-            // Pause animation only for animated-highlight
+            // Pause movement
             if (this.$animated_highlight) {
                 this.$animated_highlight.style.animation = 'none';
-                this.$animated_highlight.style.animationPlayState = 'paused';
+            }
+            if (this.$animated_ball_highlight) {
+                this.$animated_ball_highlight.style.animation = 'none';
             }
         }
 
