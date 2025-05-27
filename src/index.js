@@ -82,6 +82,7 @@ export default class Gantt {
     }
 
     setup_options(options) {
+        console.log('setup_options:', options);
         this.original_options = options;
         this.options = { ...DEFAULT_OPTIONS, ...options };
         const CSS_VARIABLES = {
@@ -144,7 +145,10 @@ export default class Gantt {
 
     update_options(options) {
         this.setup_options({ ...this.original_options, ...options });
-        this.viewManager.change_view_mode(undefined, true);
+        this.viewManager.change_view_mode(
+            this.viewManager.currentViewMode,
+            true,
+        );
         clearInterval(this.player_interval);
     }
 
@@ -490,6 +494,7 @@ export default class Gantt {
         this.play_animated_highlight(left, this.config.custom_marker_date);
 
         this.trigger_event('reset', []);
+        this.scrollManager.set_scroll_position('start');
     }
 
     map_arrows_on_bars() {

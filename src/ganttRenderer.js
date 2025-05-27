@@ -144,6 +144,8 @@ export default class GanttRenderer {
 
             $select.addEventListener('change', () => {
                 this.gantt.viewManager.change_view_mode($select.value, true);
+                this.gantt.reset_play();
+                this.gantt.scrollManager.set_scroll_position('start');
             });
             this.gantt.$side_header.appendChild($select);
         }
