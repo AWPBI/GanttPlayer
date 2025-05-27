@@ -360,29 +360,35 @@ export default class Gantt {
                 moveDistance = endLeft - adjustedLeft;
             }
 
-            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
-                (el) => {
-                    el.style.setProperty(
-                        '--animation-duration',
-                        `${animationDuration}s`,
-                    );
-                    el.style.setProperty(
-                        '--move-distance',
-                        `${moveDistance}px`,
-                    );
-                    el.style.animation = 'none';
-                    el.offsetHeight;
-                    el.style.animation = `moveRight ${animationDuration}s linear forwards`;
-                    el.style.animationPlayState = 'running';
-                },
-            );
+            // Apply animation only to animated-highlight
+            if (this.$animated_highlight) {
+                if (
+                    this.$animated_highlight.style.animationPlayState ===
+                    'running'
+                )
+                    return;
+                this.$animated_highlight.style.setProperty(
+                    '--animation-duration',
+                    `${animationDuration}s`,
+                );
+                this.$animated_highlight.style.setProperty(
+                    '--move-distance',
+                    `${moveDistance}px`,
+                );
+                this.$animated_highlight.style.animation = 'none';
+                this.$animated_highlight.offsetHeight;
+                this.$animated_highlight.style.animation = `moveRight ${animationDuration}s linear forwards`;
+                this.$animated_highlight.style.animationPlayState = 'running';
+            }
+
+            // Trigger scroll update to follow animation
+            this.scrollManager.scroll_to_position(adjustedLeft);
         } else {
-            [this.$animated_highlight, this.$animated_ball_highlight].forEach(
-                (el) => {
-                    el.style.animation = 'none';
-                    el.style.animationPlayState = 'paused';
-                },
-            );
+            // Pause animation only for animated-highlight
+            if (this.$animated_highlight) {
+                this.$animated_highlight.style.animation = 'none';
+                this.$animated_highlight.style.animationPlayState = 'paused';
+            }
         }
 
         return {
