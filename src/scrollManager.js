@@ -63,8 +63,6 @@ export default class ScrollManager {
 
         $.on(this.gantt.$container, 'scroll', (e) => {
             const scrollLeft = e.currentTarget.scrollLeft;
-            // Sync header scroll
-            this.gantt.$header.scrollLeft = scrollLeft;
             const ids = this.gantt.bars.map(({ group }) =>
                 group.getAttribute('data-id'),
             );
