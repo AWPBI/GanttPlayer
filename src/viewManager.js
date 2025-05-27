@@ -62,6 +62,7 @@ export default class ViewManager {
             gantt_start = date_utils.today();
             gantt_end = date_utils.add(date_utils.today(), 1, 'year');
         } else {
+            console.log('setup_gantt_dates: tasks');
             gantt_start = this.gantt.tasks[0]._start;
             gantt_end = this.gantt.tasks[0]._end;
             for (let task of this.gantt.tasks) {
