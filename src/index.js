@@ -90,6 +90,7 @@ export default class Gantt {
             'bar-height': 'bar_height',
             'lower-header-height': 'lower_header_height',
             'upper-header-height': 'upper_header_height',
+            'side-header-height': 'side_header_height',
         };
         for (let name in CSS_VARIABLES) {
             let setting = this.options[CSS_VARIABLES[name]];
