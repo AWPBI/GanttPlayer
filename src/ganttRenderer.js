@@ -578,22 +578,20 @@ export default class GanttRenderer {
                 this.gantt.config.header_height -
                 side_header_height
             }px`;
-            this.gantt.$animated_highlight.offsetHeight;
         }
 
         if (!this.gantt.$animated_ball_highlight) {
             this.gantt.$animated_ball_highlight = create_el({
                 top: this.gantt.config.header_height + side_header_height - 6,
-                left: adjustedLeft - 2,
+                left: adjustedLeft, // Align with animated-highlight
                 width: 6,
                 height: 6,
                 classes: 'animated-ball-highlight',
-                append_to: this.gantt.$header,
-                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001;',
+                append_to: this.gantt.$container, // Same container
+                style: 'background: var(--g-custom-highlight); border-radius: 50%; z-index: 1001; transform: translateX(-50%);', // Center visually
             });
         } else {
-            this.gantt.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
-            this.gantt.$animated_ball_highlight.offsetHeight;
+            this.gantt.$animated_ball_highlight.style.left = `${adjustedLeft}px`;
         }
 
         return {
