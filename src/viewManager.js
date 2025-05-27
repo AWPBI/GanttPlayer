@@ -112,7 +112,7 @@ export default class ViewManager {
             }
 
             let [padding_start, padding_end] = [
-                { duration: 2, scale: 'day' }, // Fixed 2-day start padding
+                { duration: 4, scale: 'day' }, // Fixed 2-day start padding
                 this.gantt.config.view_mode.padding[1]
                     ? date_utils.parse_duration(
                           this.gantt.config.view_mode.padding[1],
