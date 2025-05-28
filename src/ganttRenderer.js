@@ -50,7 +50,7 @@ export default class GanttRenderer {
                 this.gantt.options.padding +
                 (this.gantt.options.bar_height + this.gantt.options.padding) *
                     this.gantt.tasks.length -
-                40,
+                10,
             this.gantt.options.container_height !== 'auto'
                 ? this.gantt.options.container_height
                 : 0,
@@ -60,14 +60,14 @@ export default class GanttRenderer {
             x: 0,
             y: 0,
             width: grid_width,
-            height: grid_height,
+            height: grid_height - 30,
             class: 'grid-background',
             append_to: this.gantt.$svg,
         });
 
-        this.gantt.$svg.setAttribute('height', grid_height);
+        this.gantt.$svg.setAttribute('height', grid_height - 30);
         this.gantt.$svg.setAttribute('width', '100%');
-        this.gantt.grid_height = grid_height;
+        this.gantt.grid_height = grid_height - 30;
         if (this.gantt.options.container_height === 'auto') {
             this.gantt.$container.style.height = grid_height + 16 + 'px';
         }
