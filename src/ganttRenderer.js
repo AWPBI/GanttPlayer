@@ -308,7 +308,7 @@ export default class GanttRenderer {
             });
         }
 
-        this.highlight_current();
+        // this.highlight_current();
         if (this.gantt.options.custom_marker) {
             if (
                 !this.gantt.config.custom_marker_date ||
