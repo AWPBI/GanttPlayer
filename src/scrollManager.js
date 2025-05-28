@@ -52,6 +52,8 @@ export default class ScrollManager {
             });
         }
 
+        this.lastHighlightedMonth = null;
+
         $.on(this.gantt.$container, 'scroll', (e) => {
             const ids = this.gantt.bars.map(({ group }) =>
                 group.getAttribute('data-id'),
@@ -73,33 +75,22 @@ export default class ScrollManager {
                 null,
                 this.gantt.options.language,
             );
+
             let $el = this.upperTexts.find(
                 (el) => el.textContent === current_upper,
             );
 
-            this.gantt.current_date = date_utils.add(
-                this.gantt.gantt_start,
-                ((e.currentTarget.scrollLeft + ($el ? $el.clientWidth : 0)) /
-                    this.gantt.config.column_width) *
-                    this.gantt.config.step,
-                this.gantt.config.unit,
-            );
-            current_upper = this.gantt.config.view_mode.upper_text(
-                this.gantt.current_date,
-                null,
-                this.gantt.options.language,
-            );
-            $el = this.upperTexts.find(
-                (el) => el.textContent === current_upper,
-            );
-
-            if ($el !== this.gantt.$current) {
-                if (this.gantt.$current) {
-                    this.gantt.$current.classList.remove('current-upper');
-                }
-                if ($el) {
+            if ($el && this.lastHighlightedMonth !== current_upper) {
+                const rect = $el.getBoundingClientRect();
+                const containerRect =
+                    this.gantt.$container.getBoundingClientRect();
+                if (rect.right <= containerRect.left) {
+                    if (this.gantt.$current) {
+                        this.gantt.$current.classList.remove('current-upper');
+                    }
                     $el.classList.add('current-upper');
                     this.gantt.$current = $el;
+                    this.lastHighlightedMonth = current_upper;
                 }
             }
 

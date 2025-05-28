@@ -45,6 +45,7 @@ export default class GanttRenderer {
     make_grid_background() {
         const grid_width =
             this.gantt.dates.length * this.gantt.config.column_width;
+        this.gantt.config.header_height = 90;
         const grid_height = Math.max(
             this.gantt.config.header_height +
                 this.gantt.options.padding +
@@ -72,7 +73,6 @@ export default class GanttRenderer {
             this.gantt.$container.style.height = grid_height + 16 + 'px';
         }
     }
-
     make_grid_rows() {
         const rows_layer = createSVG('g', {
             append_to: this.gantt.layers.grid,
@@ -268,11 +268,11 @@ export default class GanttRenderer {
             (this.gantt.options.bar_height + this.gantt.options.padding) *
             this.gantt.tasks.length;
         this.gantt.layers.grid.innerHTML += `<pattern id="diagonalHatch" patternUnits="userSpaceOnUse" width="4" height="4">
-          <path d="M-1,1 l2,-2
-                   M0,4 l4,-4
-                   M3,5 l2,-2"
-                style="stroke:grey; stroke-width:0.3" />
-        </pattern>`;
+        <path d="M-1,1 l2,-2
+                 M0,4 l4,-4
+                 M3,5 l2,-2"
+              style="stroke:grey; stroke-width:0.3" />
+    </pattern>`;
 
         for (
             let d = new Date(this.gantt.gantt_start);
@@ -308,7 +308,7 @@ export default class GanttRenderer {
             });
         }
 
-        this.highlight_current();
+        // this.highlight_current();
         if (this.gantt.options.custom_marker) {
             if (
                 !this.gantt.config.custom_marker_date ||
@@ -327,18 +327,6 @@ export default class GanttRenderer {
                     this.gantt.gantt_start,
                 );
             }
-            console.log(
-                'make_grid_highlights: custom_marker_date=',
-                this.gantt.config.custom_marker_date,
-                'gantt_start=',
-                this.gantt.gantt_start,
-                'column_width=',
-                this.gantt.config.column_width,
-                'step=',
-                this.gantt.config.step,
-                'unit=',
-                this.gantt.config.unit,
-            );
             const diff = date_utils.diff(
                 this.gantt.config.custom_marker_date,
                 this.gantt.gantt_start,
@@ -347,7 +335,6 @@ export default class GanttRenderer {
             const left =
                 (diff / this.gantt.config.step) *
                 this.gantt.config.column_width;
-            console.log('make_grid_highlights: calculated left=', left);
             this.render_animated_highlight(
                 left,
                 this.gantt.config.custom_marker_date,
@@ -502,25 +489,6 @@ export default class GanttRenderer {
                 this.gantt.config.column_width;
         }
 
-        console.log(
-            'render_animated_highlight: left=',
-            left,
-            'adjustedLeft=',
-            adjustedLeft,
-            'dateObj=',
-            dateObj,
-            'adjustedDateObj=',
-            adjustedDateObj,
-            'gantt_start=',
-            this.gantt.gantt_start,
-            'column_width=',
-            this.gantt.config.column_width,
-            'step=',
-            this.gantt.config.step,
-            'unit=',
-            this.gantt.config.unit,
-        );
-
         let gridHeight = this.gantt.grid_height;
         if (!gridHeight) {
             gridHeight = Math.max(
@@ -540,11 +508,10 @@ export default class GanttRenderer {
             gridHeight =
                 parseFloat(gridElement.getAttribute('height')) || gridHeight;
         }
-        console.log('render_animated_highlight: gridHeight=', gridHeight);
 
         if (!this.gantt.$animated_highlight) {
             this.gantt.$animated_highlight = create_el({
-                top: this.gantt.config.header_height,
+                top: this.gantt.config.header_height, // Updated to new header height
                 left: adjustedLeft,
                 width: 2,
                 height: gridHeight - this.gantt.config.header_height,
@@ -557,13 +524,12 @@ export default class GanttRenderer {
             this.gantt.$animated_highlight.style.height = `${
                 gridHeight - this.gantt.config.header_height
             }px`;
-            // Force DOM update
             this.gantt.$animated_highlight.offsetHeight;
         }
 
         if (!this.gantt.$animated_ball_highlight) {
             this.gantt.$animated_ball_highlight = create_el({
-                top: this.gantt.config.header_height - 6,
+                top: this.gantt.config.header_height - 6, // Adjust ball position
                 left: adjustedLeft - 2,
                 width: 6,
                 height: 6,
@@ -573,7 +539,6 @@ export default class GanttRenderer {
             });
         } else {
             this.gantt.$animated_ball_highlight.style.left = `${adjustedLeft - 2}px`;
-            // Force DOM update
             this.gantt.$animated_ball_highlight.offsetHeight;
         }
 
@@ -687,8 +652,8 @@ export default class GanttRenderer {
                 last_date,
                 this.gantt.options.language,
             ),
-            upper_y: 17,
-            lower_y: this.gantt.options.upper_header_height + 5,
+            upper_y: 25,
+            lower_y: this.gantt.config.header_height - 15,
         };
     }
 
