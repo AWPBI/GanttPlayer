@@ -114,9 +114,11 @@
 
     & .current-upper {
         position: sticky;
-        left: 0 !important;
-        padding-left: 17px;
-        background: white;
+        left: 6px !important;
+        top: 26px !important;
+        padding: 3px 6px;
+        border-radius: 50%;
+        background: var(--g-actions-background);
     }
 
     & .side-header {
@@ -337,7 +339,7 @@
     }
 
     & .bar-wrapper {
-            cursor: pointer;
+        cursor: pointer;
 
         & .bar {
             outline: 1px solid var(--g-row-border-color);
