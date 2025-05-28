@@ -50,7 +50,7 @@ export default class GanttRenderer {
                 this.gantt.options.padding +
                 (this.gantt.options.bar_height + this.gantt.options.padding) *
                     this.gantt.tasks.length -
-                10,
+                40,
             this.gantt.options.container_height !== 'auto'
                 ? this.gantt.options.container_height
                 : 0,
