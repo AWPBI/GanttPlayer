@@ -7,6 +7,7 @@ import { generate_id, sanitize, create_el } from './utils';
 export default class GanttRenderer {
     constructor(gantt) {
         this.gantt = gantt;
+        this.datePositions = [];
     }
 
     setup_layers() {
@@ -227,36 +228,34 @@ export default class GanttRenderer {
                 row_y += row_height;
             }
         }
-        if (this.gantt.options.lines === 'horizontal') return;
+        if (
+            this.gantt.config.view_mode.thick_line &&
+            this.gantt.config.view_mode.thick_line(date)
+        ) {
+            tick_class += ' thick';
+        }
 
-        for (let date of this.gantt.dates) {
-            let tick_class = 'tick';
-            if (
-                this.gantt.config.view_mode.thick_line &&
-                this.gantt.config.view_mode.thick_line(date)
-            ) {
-                tick_class += ' thick';
-            }
+        createSVG('path', {
+            d: `M ${tick_x} ${tick_y} v ${tick_height}`,
+            class: tick_class,
+            append_to: this.gantt.layers.grid,
+        });
 
-            createSVG('path', {
-                d: `M ${tick_x} ${tick_y} v ${tick_height}`,
-                class: tick_class,
-                append_to: this.gantt.layers.grid,
-            });
+        // Store the x-position for this date
+        this.datePositions.push({ date, x: tick_x });
 
-            if (this.gantt.view_is('month')) {
-                tick_x +=
-                    (date_utils.get_days_in_month(date) *
-                        this.gantt.config.column_width) /
-                    30;
-            } else if (this.gantt.view_is('year')) {
-                tick_x +=
-                    (date_utils.get_days_in_year(date) *
-                        this.gantt.config.column_width) /
-                    365;
-            } else {
-                tick_x += this.gantt.config.column_width;
-            }
+        if (this.gantt.view_is('month')) {
+            tick_x +=
+                (date_utils.get_days_in_month(date) *
+                    this.gantt.config.column_width) /
+                30;
+        } else if (this.gantt.view_is('year')) {
+            tick_x +=
+                (date_utils.get_days_in_year(date) *
+                    this.gantt.config.column_width) /
+                365;
+        } else {
+            tick_x += this.gantt.config.column_width;
         }
     }
 
@@ -601,10 +600,30 @@ export default class GanttRenderer {
         let last_date = last_date_info ? last_date_info.date : null;
 
         let column_width = this.gantt.config.column_width;
-
-        const x = last_date_info
+        let x = last_date_info
             ? last_date_info.x + last_date_info.column_width
             : 0;
+
+        // Adjust x-position for month and year view modes
+        if (this.gantt.view_is('month')) {
+            const daysInMonth = date_utils.get_days_in_month(date);
+            column_width = (daysInMonth * this.gantt.config.column_width) / 30;
+            x = last_date_info
+                ? last_date_info.x +
+                  (date_utils.get_days_in_month(last_date_info.date) *
+                      this.gantt.config.column_width) /
+                      30
+                : 0;
+        } else if (this.gantt.view_is('year')) {
+            const daysInYear = date_utils.get_days_in_year(date);
+            column_width = (daysInYear * this.gantt.config.column_width) / 365;
+            x = last_date_info
+                ? last_date_info.x +
+                  (date_utils.get_days_in_year(last_date_info.date) *
+                      this.gantt.config.column_width) /
+                      365
+                : 0;
+        }
 
         let upper_text = this.gantt.config.view_mode.upper_text;
         let lower_text = this.gantt.config.view_mode.lower_text;
@@ -640,7 +659,7 @@ export default class GanttRenderer {
                     this.gantt.options.language,
                 ),
             ),
-            column_width: this.gantt.config.column_width,
+            column_width,
             x,
             upper_text: this.gantt.config.view_mode.upper_text(
                 date,
