@@ -74,6 +74,7 @@ export default class GanttRenderer {
             this.gantt.$container.style.height = grid_height + 16 + 'px';
         }
     }
+
     make_grid_rows() {
         const rows_layer = createSVG('g', {
             append_to: this.gantt.layers.grid,
@@ -228,34 +229,40 @@ export default class GanttRenderer {
                 row_y += row_height;
             }
         }
-        if (
-            this.gantt.config.view_mode.thick_line &&
-            this.gantt.config.view_mode.thick_line(date)
-        ) {
-            tick_class += ' thick';
-        }
 
-        createSVG('path', {
-            d: `M ${tick_x} ${tick_y} v ${tick_height}`,
-            class: tick_class,
-            append_to: this.gantt.layers.grid,
-        });
+        // Draw vertical ticks for each date
+        for (let date of this.gantt.dates) {
+            let tick_class = 'tick';
+            if (
+                this.gantt.config.view_mode.thick_line &&
+                this.gantt.config.view_mode.thick_line(date)
+            ) {
+                tick_class += ' thick';
+            }
 
-        // Store the x-position for this date
-        this.datePositions.push({ date, x: tick_x });
+            createSVG('path', {
+                d: `M ${tick_x} ${tick_y} v ${tick_height}`,
+                class: tick_class,
+                append_to: this.gantt.layers.grid,
+            });
 
-        if (this.gantt.view_is('month')) {
-            tick_x +=
-                (date_utils.get_days_in_month(date) *
-                    this.gantt.config.column_width) /
-                30;
-        } else if (this.gantt.view_is('year')) {
-            tick_x +=
-                (date_utils.get_days_in_year(date) *
-                    this.gantt.config.column_width) /
-                365;
-        } else {
-            tick_x += this.gantt.config.column_width;
+            // Store the x-position for this date
+            this.datePositions.push({ date, x: tick_x });
+
+            // Update tick_x based on view mode
+            if (this.gantt.view_is('month')) {
+                tick_x +=
+                    (date_utils.get_days_in_month(date) *
+                        this.gantt.config.column_width) /
+                    30;
+            } else if (this.gantt.view_is('year')) {
+                tick_x +=
+                    (date_utils.get_days_in_year(date) *
+                        this.gantt.config.column_width) /
+                    365;
+            } else {
+                tick_x += this.gantt.config.column_width;
+            }
         }
     }
 
@@ -510,7 +517,7 @@ export default class GanttRenderer {
 
         if (!this.gantt.$animated_highlight) {
             this.gantt.$animated_highlight = create_el({
-                top: this.gantt.config.header_height, // Updated to new header height
+                top: this.gantt.config.header_height,
                 left: adjustedLeft,
                 width: 2,
                 height: gridHeight - this.gantt.config.header_height,
@@ -528,7 +535,7 @@ export default class GanttRenderer {
 
         if (!this.gantt.$animated_ball_highlight) {
             this.gantt.$animated_ball_highlight = create_el({
-                top: this.gantt.config.header_height - 6, // Adjust ball position
+                top: this.gantt.config.header_height - 6,
                 left: adjustedLeft - 2,
                 width: 6,
                 height: 6,
@@ -678,7 +685,7 @@ export default class GanttRenderer {
 
     make_bars() {
         this.gantt.bars = this.gantt.tasks.map((task) => {
-            const bar = new Bar(this.gantt, task);
+            const bar = new Bar(this.gantt, task, this.datePositions);
             this.gantt.layers.bar.appendChild(bar.group);
             return bar;
         });
