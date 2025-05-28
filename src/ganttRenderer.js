@@ -46,7 +46,7 @@ export default class GanttRenderer {
         const grid_width =
             this.gantt.dates.length * this.gantt.config.column_width;
         // Increase header_height, e.g., from 50 to 80
-        this.gantt.config.header_height = 80; // Adjust this value as needed
+        this.gantt.config.header_height = 90; // Adjust this value as needed
         const grid_height = Math.max(
             this.gantt.config.header_height +
                 this.gantt.options.padding +
