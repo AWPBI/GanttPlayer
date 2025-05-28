@@ -227,8 +227,16 @@ export class EventQueueManager {
                     if (this.gantt.options.player_use_fa) {
                         this.gantt.$player_button.classList.remove('fa-pause');
                         this.gantt.$player_button.classList.add('fa-play');
+                        this.gantt.$player_button.onclick = () => {
+                            this.gantt.reset_play();
+                            this.gantt.toggle_play();
+                        };
                     } else {
                         this.gantt.$player_button.textContent = 'Play';
+                        this.gantt.$player_button.onclick = () => {
+                            this.gantt.reset_play();
+                            this.gantt.toggle_play();
+                        };
                     }
                 }
 

@@ -52,7 +52,6 @@ export default class ScrollManager {
             });
         }
 
-        // Initialize a variable to track the last highlighted month
         this.lastHighlightedMonth = null;
 
         $.on(this.gantt.$container, 'scroll', (e) => {
@@ -64,7 +63,6 @@ export default class ScrollManager {
                 dx = e.currentTarget.scrollLeft - this.x_on_scroll_start;
             }
 
-            // Calculate the current date based on scroll position
             this.gantt.current_date = date_utils.add(
                 this.gantt.gantt_start,
                 (e.currentTarget.scrollLeft / this.gantt.config.column_width) *
@@ -72,31 +70,27 @@ export default class ScrollManager {
                 this.gantt.config.unit,
             );
 
-            // Get the current month (upper_text) based on the scroll position
             let current_upper = this.gantt.config.view_mode.upper_text(
                 this.gantt.current_date,
                 null,
                 this.gantt.options.language,
             );
 
-            // Find the upper-text element for the current month
             let $el = this.upperTexts.find(
                 (el) => el.textContent === current_upper,
             );
 
-            // Check if the element exists and its right edge is fully past the left edge of the viewport
             if ($el && this.lastHighlightedMonth !== current_upper) {
                 const rect = $el.getBoundingClientRect();
                 const containerRect =
                     this.gantt.$container.getBoundingClientRect();
-                // Only update if the element's right edge is no longer visible (left of the viewport)
                 if (rect.right <= containerRect.left) {
                     if (this.gantt.$current) {
                         this.gantt.$current.classList.remove('current-upper');
                     }
                     $el.classList.add('current-upper');
                     this.gantt.$current = $el;
-                    this.lastHighlightedMonth = current_upper; // Update the last highlighted month
+                    this.lastHighlightedMonth = current_upper;
                 }
             }
 

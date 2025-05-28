@@ -45,8 +45,7 @@ export default class GanttRenderer {
     make_grid_background() {
         const grid_width =
             this.gantt.dates.length * this.gantt.config.column_width;
-        // Increase header_height, e.g., from 50 to 80
-        this.gantt.config.header_height = 90; // Adjust this value as needed
+        this.gantt.config.header_height = 90;
         const grid_height = Math.max(
             this.gantt.config.header_height +
                 this.gantt.options.padding +
@@ -85,7 +84,7 @@ export default class GanttRenderer {
             this.gantt.options.bar_height + this.gantt.options.padding;
 
         for (
-            let y = this.gantt.config.header_height; // Starts at new header height
+            let y = this.gantt.config.header_height;
             y < this.gantt.grid_height;
             y += row_height
         ) {
@@ -197,7 +196,7 @@ export default class GanttRenderer {
     make_grid_ticks() {
         if (this.gantt.options.lines === 'none') return;
         let tick_x = 0;
-        let tick_y = this.gantt.config.header_height; // Updated to new header height
+        let tick_y = this.gantt.config.header_height;
         let tick_height =
             this.gantt.grid_height - this.gantt.config.header_height;
 
@@ -300,7 +299,7 @@ export default class GanttRenderer {
             );
             createSVG('rect', {
                 x: diff * this.gantt.config.column_width,
-                y: this.gantt.config.header_height, // Updated to new header height
+                y: this.gantt.config.header_height,
                 width: this.gantt.config.column_width,
                 height: height,
                 class: 'ignored-bar',
@@ -455,14 +454,14 @@ export default class GanttRenderer {
             this.gantt.config.column_width;
 
         this.gantt.$current_highlight = create_el({
-            top: this.gantt.config.header_height, // Updated to new header height
+            top: this.gantt.config.header_height,
             left,
             height: this.gantt.grid_height - this.gantt.config.header_height,
             classes: 'current-highlight',
             append_to: this.gantt.$container,
         });
         this.gantt.$current_ball_highlight = create_el({
-            top: this.gantt.config.header_height - 6, // Adjust ball position
+            top: this.gantt.config.header_height - 6,
             left: left - 2.5,
             width: 6,
             height: 6,
@@ -653,8 +652,8 @@ export default class GanttRenderer {
                 last_date,
                 this.gantt.options.language,
             ),
-            upper_y: 25, // Adjusted for larger header
-            lower_y: this.gantt.config.header_height - 15, // Adjusted for larger header
+            upper_y: 25,
+            lower_y: this.gantt.config.header_height - 15,
         };
     }
 

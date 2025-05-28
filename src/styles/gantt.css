@@ -114,11 +114,9 @@
 
     & .current-upper {
         position: sticky;
-        left: 6px !important;
-        top: 26px !important;
-        padding: 3px 6px;
-        border-radius: 50%;
-        background: var(--g-actions-background);
+        left: 0 !important;
+        padding-left: 17px;
+        background: white;
     }
 
     & .side-header {
