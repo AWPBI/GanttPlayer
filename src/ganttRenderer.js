@@ -117,70 +117,130 @@ export default class GanttRenderer {
     }
 
     make_side_header() {
+        // Check if side-header exists in DOM
         const existingHeader =
             this.gantt.$side_header &&
             document.body.contains(this.gantt.$side_header);
         if (existingHeader) {
+            console.log(
+                'Reusing existing side-header:',
+                this.gantt.$side_header,
+            );
             this.initializeDropdown();
+            this.initializeButtons();
             return;
         }
 
+        // Reset references when creating new side-header
+        this.gantt.$side_header = null;
+        this.gantt.$player_button = null;
+        this.gantt.$player_reset_button = null;
+        this.gantt.$today_button = null;
+
+        // Create side-header
         this.gantt.$side_header = create_el({
             classes: 'side-header',
             append_to: this.gantt.$upper_header,
         });
+        console.log('Side header created:', this.gantt.$side_header);
 
+        // Initialize buttons and dropdown
+        this.initializeButtons();
+        this.initializeDropdown();
+    }
+
+    initializeButtons() {
+        // Add Today button
         if (this.gantt.options.today_button) {
-            const $today_button = create_el({
-                tag: 'button',
-                classes: 'today-button',
-                append_to: this.gantt.$side_header,
-            });
-            $today_button.textContent = 'Today';
-            $today_button.onclick = this.gantt.scroll_current.bind(this.gantt);
+            let $today_button =
+                this.gantt.$side_header.querySelector('.today-button');
+            if (!$today_button) {
+                $today_button = create_el({
+                    tag: 'button',
+                    classes: 'today-button',
+                    append_to: this.gantt.$side_header,
+                });
+                $today_button.textContent = 'Today';
+                $today_button.onclick = this.gantt.scroll_current.bind(
+                    this.gantt,
+                );
+                console.log('Today button created:', $today_button);
+            } else {
+                console.log('Reusing existing today button:', $today_button);
+            }
             this.gantt.$today_button = $today_button;
         }
 
+        // Add Reset button
         if (this.gantt.options.player_button) {
-            const player_reset_button = create_el({
-                tag: 'button',
-                classes: 'player-reset-button',
-                append_to: this.gantt.$side_header,
-            });
-            if (this.gantt.options.player_use_fa) {
-                player_reset_button.classList.add('fas', 'fa-redo');
-            } else {
-                player_reset_button.textContent = 'Reset';
-            }
-            player_reset_button.onclick = this.gantt.reset_play.bind(
-                this.gantt,
+            let player_reset_button = this.gantt.$side_header.querySelector(
+                '.player-reset-button',
             );
+            if (!player_reset_button) {
+                player_reset_button = create_el({
+                    tag: 'button',
+                    classes: 'player-reset-button',
+                    append_to: this.gantt.$side_header,
+                });
+                if (this.gantt.options.player_use_fa) {
+                    player_reset_button.classList.add('fas', 'fa-redo');
+                } else {
+                    player_reset_button.textContent = 'Reset';
+                }
+                player_reset_button.onclick = this.gantt.reset_play.bind(
+                    this.gantt,
+                );
+                console.log(
+                    'Player reset button created:',
+                    player_reset_button,
+                );
+            } else {
+                console.log(
+                    'Reusing existing player reset button:',
+                    player_reset_button,
+                );
+            }
             this.gantt.$player_reset_button = player_reset_button;
         }
 
+        // Add Play button
         if (this.gantt.options.player_button) {
-            let $player_button = create_el({
-                tag: 'button',
-                classes: 'player-button',
-                append_to: this.gantt.$side_header,
-            });
-            if (this.gantt.options.player_use_fa) {
-                $player_button.classList.add(
-                    'fas',
-                    this.gantt.options.player_state ? 'fa-pause' : 'fa-play',
+            let $player_button =
+                this.gantt.$side_header.querySelector('.player-button');
+            if (!$player_button) {
+                $player_button = create_el({
+                    tag: 'button',
+                    classes: 'player-button',
+                    append_to: this.gantt.$side_header,
+                });
+                if (this.gantt.options.player_use_fa) {
+                    $player_button.classList.add(
+                        'fas',
+                        this.gantt.options.player_state
+                            ? 'fa-pause'
+                            : 'fa-play',
+                    );
+                } else {
+                    $player_button.textContent = 'Play';
+                }
+                $player_button.onclick = this.gantt.toggle_play.bind(
+                    this.gantt,
                 );
+                console.log('Player button created:', $player_button);
             } else {
-                $player_button.textContent = 'Play';
+                console.log('Reusing existing player button:', $player_button);
             }
-            $player_button.onclick = this.gantt.toggle_play.bind(this.gantt);
-            $player_button = $player_button;
+            this.gantt.$player_button = $player_button;
         }
-        this.initializeDropdown();
     }
 
     initializeDropdown() {
         if (!this.gantt.options.view_mode_select) return;
 
+        // Log view_modes
+        console.log('View modes:', this.gantt.options.view_modes);
+
+        // Create or update dropdown trigger directly in side-header
         let $dropdownTrigger =
             this.gantt.$side_header.querySelector('.dropdown-trigger');
         if (!$dropdownTrigger) {
@@ -190,14 +250,17 @@ export default class GanttRenderer {
                 append_to: this.gantt.$side_header,
                 type: 'button',
             });
+            console.log('Dropdown trigger created:', $dropdownTrigger);
         }
         $dropdownTrigger.textContent =
             this.gantt.config.view_mode?.name || 'Mode';
 
+        // Check for existing dropdown menu
         let $dropdownMenu = document.querySelector(
             '.dropdown-menu[data-id="gantt-viewmode-menu"]',
         );
         if ($dropdownMenu) {
+            console.log('Reusing existing dropdown menu:', $dropdownMenu);
             $dropdownMenu.innerHTML = ''; // Clear existing options
             $dropdownMenu.style.display = 'none'; // Reset inline style
         } else {
@@ -207,21 +270,37 @@ export default class GanttRenderer {
             });
             $dropdownMenu.setAttribute('data-id', 'gantt-viewmode-menu');
             $dropdownMenu.style.display = 'none';
+            console.log('Dropdown menu created:', $dropdownMenu);
         }
         this.gantt.$dropdownMenu = $dropdownMenu;
 
+        // Log computed display style
+        console.log(
+            'Dropdown menu display:',
+            getComputedStyle($dropdownMenu).display,
+        );
+
+        // Clean up duplicate menus
         const duplicateMenus = document.querySelectorAll(
             '.dropdown-menu:not([data-id="gantt-viewmode-menu"])',
         );
         duplicateMenus.forEach((menu) => {
+            console.log('Removing duplicate menu:', menu);
             menu.remove();
         });
+        console.log(
+            'Dropdown menu count:',
+            document.querySelectorAll('.dropdown-menu').length,
+        );
+
+        // Create options list
         const $optionsList = create_el({
             tag: 'ul',
             classes: '',
             append_to: $dropdownMenu,
         });
 
+        // Add default "Mode" option
         const $defaultOption = create_el({
             tag: 'li',
             classes: 'dropdown-option disabled',
@@ -230,6 +309,7 @@ export default class GanttRenderer {
         $defaultOption.textContent = 'Mode';
         $defaultOption.dataset.value = '';
 
+        // Populate view mode options
         try {
             if (
                 this.gantt.options.view_modes &&
@@ -237,7 +317,7 @@ export default class GanttRenderer {
             ) {
                 for (const mode of this.gantt.options.view_modes) {
                     if (!mode || !mode.name) {
-                        console.warn('Invalid view mode: ', mode);
+                        console.warn('Invalid view mode:', mode);
                         continue;
                     }
                     const $option = create_el({
@@ -254,6 +334,10 @@ export default class GanttRenderer {
                     $option.addEventListener('click', (e) => {
                         e.stopPropagation();
                         if ($option.dataset.value) {
+                            console.log(
+                                'Selected view mode:',
+                                $option.dataset.value,
+                            );
                             this.gantt.viewManager.change_view_mode(
                                 $option.dataset.value,
                                 true,
@@ -271,9 +355,17 @@ export default class GanttRenderer {
                             $option.classList.add('selected');
                             $dropdownMenu.classList.remove('show');
                             $dropdownMenu.style.display = 'none';
+                            console.log(
+                                'Dropdown closed after option select, display:',
+                                getComputedStyle($dropdownMenu).display,
+                            );
+                            // Check side-header
                             if (
                                 !document.body.contains(this.gantt.$side_header)
                             ) {
+                                console.log(
+                                    'Side header missing, rebuilding...',
+                                );
                                 this.gantt.$side_header = null;
                                 this.make_side_header();
                             }
@@ -290,6 +382,15 @@ export default class GanttRenderer {
             console.error('Error populating dropdown:', error);
         }
 
+        // Log populated options
+        console.log(
+            'Dropdown options:',
+            Array.from($optionsList.querySelectorAll('.dropdown-option')).map(
+                (opt) => opt.textContent,
+            ),
+        );
+
+        // Toggle dropdown menu
         const toggleDropdown = (e) => {
             e.stopPropagation();
             const isOpen = $dropdownMenu.classList.contains('show');
@@ -301,7 +402,14 @@ export default class GanttRenderer {
                 $dropdownMenu.style.top = `${rect.bottom + window.pageYOffset}px`;
                 $dropdownMenu.style.left = `${rect.left + window.pageXOffset}px`;
                 $dropdownMenu.style.minWidth = `${rect.width}px`;
+                console.log('Trigger rect:', rect);
             }
+            console.log(
+                'Dropdown toggled:',
+                $dropdownMenu.classList.contains('show'),
+                'display:',
+                getComputedStyle($dropdownMenu).display,
+            );
         };
         if (this.gantt.dropdownToggleHandler) {
             $dropdownTrigger.removeEventListener(
@@ -312,6 +420,7 @@ export default class GanttRenderer {
         this.gantt.dropdownToggleHandler = toggleDropdown;
         $dropdownTrigger.addEventListener('click', toggleDropdown);
 
+        // Close dropdown on outside click
         const closeDropdown = (e) => {
             if (
                 !$dropdownTrigger.contains(e.target) &&
@@ -319,6 +428,10 @@ export default class GanttRenderer {
             ) {
                 $dropdownMenu.classList.remove('show');
                 $dropdownMenu.style.display = 'none';
+                console.log(
+                    'Dropdown closed via outside click, display:',
+                    getComputedStyle($dropdownMenu).display,
+                );
             }
         };
         if (this.gantt.dropdownCloseHandler) {
