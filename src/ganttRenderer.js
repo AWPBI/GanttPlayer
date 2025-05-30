@@ -117,51 +117,36 @@ export default class GanttRenderer {
     }
 
     make_side_header() {
-        this.gantt.$side_header = create_el({
-            classes: 'side-header',
-        });
-        this.gantt.$upper_header.prepend(this.gantt.$side_header);
-
-        if (this.gantt.options.view_mode_select) {
-            const $select = document.createElement('select');
-            $select.classList.add('viewmode-select');
-
-            const $el = document.createElement('option');
-            $el.selected = true;
-            $el.disabled = true;
-            $el.textContent = 'Mode';
-            $select.appendChild($el);
-
-            for (const mode of this.gantt.options.view_modes) {
-                const $option = document.createElement('option');
-                $option.value = mode.name;
-                $option.textContent = mode.name;
-                if (mode.name === this.gantt.config.view_mode.name) {
-                    $option.selected = true;
-                }
-                $select.appendChild($option);
-            }
-
-            $select.addEventListener('change', () => {
-                this.gantt.viewManager.change_view_mode($select.value, true);
-                this.gantt.reset_play();
-                this.gantt.scrollManager.set_scroll_position('start');
-            });
-            this.gantt.$side_header.appendChild($select);
+        const existingHeader =
+            this.gantt.$side_header &&
+            document.body.contains(this.gantt.$side_header);
+        if (existingHeader) {
+            this.initializeDropdown();
+            return;
         }
 
+        this.gantt.$side_header = create_el({
+            classes: 'side-header',
+            append_to: this.gantt.$upper_header,
+        });
+
         if (this.gantt.options.today_button) {
-            let $today_button = document.createElement('button');
-            $today_button.classList.add('today-button');
+            const $today_button = create_el({
+                tag: 'button',
+                classes: 'today-button',
+                append_to: this.gantt.$side_header,
+            });
             $today_button.textContent = 'Today';
             $today_button.onclick = this.gantt.scroll_current.bind(this.gantt);
-            this.gantt.$side_header.prepend($today_button);
             this.gantt.$today_button = $today_button;
         }
 
         if (this.gantt.options.player_button) {
-            let player_reset_button = document.createElement('button');
-            player_reset_button.classList.add('player-reset-button');
+            const player_reset_button = create_el({
+                tag: 'button',
+                classes: 'player-reset-button',
+                append_to: this.gantt.$side_header,
+            });
             if (this.gantt.options.player_use_fa) {
                 player_reset_button.classList.add('fas', 'fa-redo');
             } else {
@@ -170,27 +155,183 @@ export default class GanttRenderer {
             player_reset_button.onclick = this.gantt.reset_play.bind(
                 this.gantt,
             );
-            this.gantt.$side_header.prepend(player_reset_button);
             this.gantt.$player_reset_button = player_reset_button;
         }
 
         if (this.gantt.options.player_button) {
-            let $player_button = document.createElement('button');
-            $player_button.classList.add('player-button');
+            let $player_button = create_el({
+                tag: 'button',
+                classes: 'player-button',
+                append_to: this.gantt.$side_header,
+            });
             if (this.gantt.options.player_use_fa) {
-                $player_button.classList.add('fas');
-                if (this.gantt.options.player_state) {
-                    $player_button.classList.add('fa-pause');
-                } else {
-                    $player_button.classList.add('fa-play');
-                }
+                $player_button.classList.add(
+                    'fas',
+                    this.gantt.options.player_state ? 'fa-pause' : 'fa-play',
+                );
             } else {
                 $player_button.textContent = 'Play';
             }
             $player_button.onclick = this.gantt.toggle_play.bind(this.gantt);
-            this.gantt.$side_header.prepend($player_button);
-            this.gantt.$player_button = $player_button;
+            $player_button = $player_button;
         }
+        this.initializeDropdown();
+    }
+
+    initializeDropdown() {
+        if (!this.gantt.options.view_mode_select) return;
+
+        let $dropdownTrigger =
+            this.gantt.$side_header.querySelector('.dropdown-trigger');
+        if (!$dropdownTrigger) {
+            $dropdownTrigger = create_el({
+                tag: 'button',
+                classes: 'dropdown-trigger',
+                append_to: this.gantt.$side_header,
+                type: 'button',
+            });
+        }
+        $dropdownTrigger.textContent =
+            this.gantt.config.view_mode?.name || 'Mode';
+
+        let $dropdownMenu = document.querySelector(
+            '.dropdown-menu[data-id="gantt-viewmode-menu"]',
+        );
+        if ($dropdownMenu) {
+            $dropdownMenu.innerHTML = ''; // Clear existing options
+            $dropdownMenu.style.display = 'none'; // Reset inline style
+        } else {
+            $dropdownMenu = create_el({
+                classes: 'dropdown-menu',
+                append_to: document.body,
+            });
+            $dropdownMenu.setAttribute('data-id', 'gantt-viewmode-menu');
+            $dropdownMenu.style.display = 'none';
+        }
+        this.gantt.$dropdownMenu = $dropdownMenu;
+
+        const duplicateMenus = document.querySelectorAll(
+            '.dropdown-menu:not([data-id="gantt-viewmode-menu"])',
+        );
+        duplicateMenus.forEach((menu) => {
+            menu.remove();
+        });
+        const $optionsList = create_el({
+            tag: 'ul',
+            classes: '',
+            append_to: $dropdownMenu,
+        });
+
+        const $defaultOption = create_el({
+            tag: 'li',
+            classes: 'dropdown-option disabled',
+            append_to: $optionsList,
+        });
+        $defaultOption.textContent = 'Mode';
+        $defaultOption.dataset.value = '';
+
+        try {
+            if (
+                this.gantt.options.view_modes &&
+                Symbol.iterator in Object(this.gantt.options.view_modes)
+            ) {
+                for (const mode of this.gantt.options.view_modes) {
+                    if (!mode || !mode.name) {
+                        console.warn('Invalid view mode:', mode);
+                        continue;
+                    }
+                    const $option = create_el({
+                        tag: 'li',
+                        classes: 'dropdown-option',
+                        append_to: $optionsList,
+                    });
+                    $option.textContent = mode.name;
+                    $option.dataset.value = mode.name;
+                    if (mode.name === this.gantt.config.view_mode?.name) {
+                        $option.classList.add('selected');
+                        $dropdownTrigger.textContent = mode.name;
+                    }
+                    $option.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if ($option.dataset.value) {
+                            this.gantt.viewManager.change_view_mode(
+                                $option.dataset.value,
+                                true,
+                            );
+                            this.gantt.reset_play();
+                            this.gantt.scrollManager.set_scroll_position(
+                                'start',
+                            );
+                            $dropdownTrigger.textContent = $option.textContent;
+                            $optionsList
+                                .querySelectorAll('.dropdown-option')
+                                .forEach((opt) =>
+                                    opt.classList.remove('selected'),
+                                );
+                            $option.classList.add('selected');
+                            $dropdownMenu.classList.remove('show');
+                            $dropdownMenu.style.display = 'none';
+                            if (
+                                !document.body.contains(this.gantt.$side_header)
+                            ) {
+                                this.gantt.$side_header = null;
+                                this.make_side_header();
+                            }
+                        }
+                    });
+                }
+            } else {
+                console.error(
+                    'view_modes is not iterable or undefined:',
+                    this.gantt.options.view_modes,
+                );
+            }
+        } catch (error) {
+            console.error('Error populating dropdown:', error);
+        }
+
+        const toggleDropdown = (e) => {
+            e.stopPropagation();
+            const isOpen = $dropdownMenu.classList.contains('show');
+            $dropdownMenu.classList.toggle('show', !isOpen);
+            $dropdownMenu.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen) {
+                const rect = $dropdownTrigger.getBoundingClientRect();
+                $dropdownMenu.style.position = 'fixed';
+                $dropdownMenu.style.top = `${rect.bottom + window.pageYOffset}px`;
+                $dropdownMenu.style.left = `${rect.left + window.pageXOffset}px`;
+                $dropdownMenu.style.minWidth = `${rect.width}px`;
+            }
+        };
+        if (this.gantt.dropdownToggleHandler) {
+            $dropdownTrigger.removeEventListener(
+                'click',
+                this.gantt.dropdownToggleHandler,
+            );
+        }
+        this.gantt.dropdownToggleHandler = toggleDropdown;
+        $dropdownTrigger.addEventListener('click', toggleDropdown);
+
+        const closeDropdown = (e) => {
+            if (
+                !$dropdownTrigger.contains(e.target) &&
+                !$dropdownMenu.contains(e.target)
+            ) {
+                $dropdownMenu.classList.remove('show');
+                $dropdownMenu.style.display = 'none';
+            }
+        };
+        if (this.gantt.dropdownCloseHandler) {
+            document.removeEventListener(
+                'mousedown',
+                this.gantt.dropdownCloseHandler,
+                { capture: true },
+            );
+        }
+        this.gantt.dropdownCloseHandler = closeDropdown;
+        document.addEventListener('mousedown', closeDropdown, {
+            capture: true,
+        });
     }
 
     make_grid_ticks() {
