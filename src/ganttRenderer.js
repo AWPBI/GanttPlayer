@@ -125,7 +125,7 @@ export default class GanttRenderer {
         if (this.gantt.options.view_mode_select) {
             // Create custom dropdown container
             const $dropdownContainer = create_el({
-                classes: 'custom-dropdown',
+                classes: 'custom-dropdown viewmode-select', // Reuse viewmode-select for styling consistency
                 append_to: this.gantt.$side_header,
             });
 
@@ -133,8 +133,11 @@ export default class GanttRenderer {
             const $dropdownTrigger = create_el({
                 classes: 'dropdown-trigger',
                 append_to: $dropdownContainer,
+                tag: 'button', // Use button for better accessibility
+                type: 'button',
             });
-            $dropdownTrigger.textContent = 'Mode';
+            $dropdownTrigger.textContent =
+                this.gantt.config.view_mode.name || 'Mode';
 
             // Create dropdown menu
             const $dropdownMenu = create_el({
@@ -167,7 +170,6 @@ export default class GanttRenderer {
                 $option.textContent = mode.name;
                 $option.dataset.value = mode.name;
                 if (mode.name === this.gantt.config.view_mode.name) {
-                    $dropdownTrigger.textContent = mode.name; // Set current mode as trigger text
                     $option.classList.add('selected');
                 }
 
@@ -181,41 +183,50 @@ export default class GanttRenderer {
                         this.gantt.reset_play();
                         this.gantt.scrollManager.set_scroll_position('start');
                         $dropdownTrigger.textContent = $option.textContent;
-                        // Update selected state
                         $optionsList
                             .querySelectorAll('.dropdown-option')
                             .forEach((opt) => opt.classList.remove('selected'));
                         $option.classList.add('selected');
-                        $dropdownMenu.classList.remove('open');
+                        $dropdownMenu.classList.remove('show');
                     }
                 });
             }
 
             // Toggle dropdown menu on trigger click
-            $dropdownTrigger.addEventListener('click', () => {
-                $dropdownMenu.classList.toggle('open');
+            $dropdownTrigger.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent event bubbling to avoid header interference
+                $dropdownMenu.classList.toggle('show');
             });
 
             // Close dropdown when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!$dropdownContainer.contains(e.target)) {
-                    $dropdownMenu.classList.remove('open');
-                }
-            });
+            document.addEventListener(
+                'click',
+                (e) => {
+                    if (!$dropdownContainer.contains(e.target)) {
+                        $dropdownMenu.classList.remove('show');
+                    }
+                },
+                { capture: true },
+            ); // Use capture to ensure compatibility with iframe
         }
 
         if (this.gantt.options.today_button) {
-            let $today_button = document.createElement('button');
-            $today_button.classList.add('today-button');
+            let $today_button = create_el({
+                tag: 'button',
+                classes: 'today-button',
+                append_to: this.gantt.$side_header,
+            });
             $today_button.textContent = 'Today';
             $today_button.onclick = this.gantt.scroll_current.bind(this.gantt);
-            this.gantt.$side_header.prepend($today_button);
             this.gantt.$today_button = $today_button;
         }
 
         if (this.gantt.options.player_button) {
-            let player_reset_button = document.createElement('button');
-            player_reset_button.classList.add('player-reset-button');
+            let player_reset_button = create_el({
+                tag: 'button',
+                classes: 'player-reset-button',
+                append_to: this.gantt.$side_header,
+            });
             if (this.gantt.options.player_use_fa) {
                 player_reset_button.classList.add('fas', 'fa-redo');
             } else {
@@ -224,25 +235,24 @@ export default class GanttRenderer {
             player_reset_button.onclick = this.gantt.reset_play.bind(
                 this.gantt,
             );
-            this.gantt.$side_header.prepend(player_reset_button);
             this.gantt.$player_reset_button = player_reset_button;
         }
 
         if (this.gantt.options.player_button) {
-            let $player_button = document.createElement('button');
-            $player_button.classList.add('player-button');
+            let $player_button = create_el({
+                tag: 'button',
+                classes: 'player-button',
+                append_to: this.gantt.$side_header,
+            });
             if (this.gantt.options.player_use_fa) {
                 $player_button.classList.add('fas');
-                if (this.gantt.options.player_state) {
-                    $player_button.classList.add('fa-pause');
-                } else {
-                    $player_button.classList.add('fa-play');
-                }
+                $player_button.classList.add(
+                    this.gantt.options.player_state ? 'fa-pause' : 'fa-play',
+                );
             } else {
                 $player_button.textContent = 'Play';
             }
             $player_button.onclick = this.gantt.toggle_play.bind(this.gantt);
-            this.gantt.$side_header.prepend($player_button);
             this.gantt.$player_button = $player_button;
         }
     }
