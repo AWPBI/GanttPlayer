@@ -119,7 +119,7 @@ export default class GanttRenderer {
     make_side_header() {
         // Create side-header
         this.gantt.$side_header = create_el({
-            classes: 'side-header', // Ensure classes is a string
+            classes: 'side-header', // Explicit string
             append_to: this.gantt.$upper_header,
         });
         console.log('Side header created:', this.gantt.$side_header);
@@ -128,9 +128,9 @@ export default class GanttRenderer {
             // Log view_modes to debug population
             console.log('View modes:', this.gantt.options.view_modes);
 
-            // Create select wrapper to control dropdown positioning
+            // Create select wrapper
             const $selectWrapper = create_el({
-                classes: 'select-wrapper viewmode-select-wrapper', // String classes
+                classes: 'select-wrapper viewmode-select-wrapper', // Explicit string
                 append_to: this.gantt.$side_header,
             });
             console.log('Select wrapper created:', $selectWrapper);
@@ -138,7 +138,7 @@ export default class GanttRenderer {
             // Create select element
             const $select = create_el({
                 tag: 'select',
-                classes: 'viewmode-select',
+                classes: 'viewmode-select', // Explicit string
                 append_to: $selectWrapper,
             });
             console.log('Select element created:', $select);
@@ -146,40 +146,48 @@ export default class GanttRenderer {
             // Add default "Mode" option
             const $defaultOption = create_el({
                 tag: 'option',
+                classes: '', // Explicit empty string
                 append_to: $select,
             });
             $defaultOption.textContent = 'Mode';
             $defaultOption.disabled = true;
             $defaultOption.selected = true;
 
-            // Populate view mode options
-            if (
-                Array.isArray(this.gantt.options.view_modes) &&
-                this.gantt.options.view_modes.length > 0
-            ) {
-                this.gantt.options.view_modes.forEach((mode) => {
-                    if (!mode || !mode.name) {
-                        console.warn('Invalid view mode:', mode);
-                        return;
+            // Populate view mode options using original for...of loop
+            try {
+                if (
+                    this.gantt.options.view_modes &&
+                    Symbol.iterator in Object(this.gantt.options.view_modes)
+                ) {
+                    for (const mode of this.gantt.options.view_modes) {
+                        if (!mode || !mode.name) {
+                            console.warn('Invalid view mode:', mode);
+                            continue;
+                        }
+                        const $option = create_el({
+                            tag: 'option',
+                            classes: '', // Explicit empty string
+                            append_to: $select,
+                        });
+                        $option.value = mode.name;
+                        $option.textContent = mode.name;
+                        if (
+                            mode.name ===
+                            (this.gantt.config.view_mode?.name || '')
+                        ) {
+                            $option.selected = true;
+                        }
                     }
-                    const $option = create_el({
-                        tag: 'option',
-                        append_to: $select,
-                    });
-                    $option.value = mode.name;
-                    $option.textContent = mode.name;
-                    if (
-                        mode.name === (this.gantt.config.view_mode?.name || '')
-                    ) {
-                        $option.selected = true;
-                    }
-                });
-            } else {
-                console.error(
-                    'view_modes is not an array or is empty:',
-                    this.gantt.options.view_modes,
-                );
-                $select.disabled = true; // Disable select if no valid modes
+                } else {
+                    console.error(
+                        'view_modes is not iterable or undefined:',
+                        this.gantt.options.view_modes,
+                    );
+                    $select.disabled = true; // Disable select if no valid modes
+                }
+            } catch (error) {
+                console.error('Error populating view modes:', error);
+                $select.disabled = true;
             }
 
             // Handle view mode change
@@ -199,7 +207,7 @@ export default class GanttRenderer {
         if (this.gantt.options.today_button) {
             const $today_button = create_el({
                 tag: 'button',
-                classes: 'today-button',
+                classes: 'today-button', // Explicit string
                 append_to: this.gantt.$side_header,
             });
             $today_button.textContent = 'Today';
@@ -211,7 +219,7 @@ export default class GanttRenderer {
         if (this.gantt.options.player_button) {
             const player_reset_button = create_el({
                 tag: 'button',
-                classes: 'player-reset-button',
+                classes: 'player-reset-button', // Explicit string
                 append_to: this.gantt.$side_header,
             });
             if (this.gantt.options.player_use_fa) {
@@ -229,7 +237,7 @@ export default class GanttRenderer {
         if (this.gantt.options.player_button) {
             const $player_button = create_el({
                 tag: 'button',
-                classes: 'player-button',
+                classes: 'player-button', // Explicit string
                 append_to: this.gantt.$side_header,
             });
             if (this.gantt.options.player_use_fa) {
