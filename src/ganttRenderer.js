@@ -130,7 +130,7 @@ export default class GanttRenderer {
 
             // Create dropdown container
             const $dropdownContainer = create_el({
-                classes: 'custom-dropdown viewmode-select',
+                classes: 'viewmode-select',
                 append_to: this.gantt.$side_header,
             });
             console.log('Dropdown container created:', $dropdownContainer);
