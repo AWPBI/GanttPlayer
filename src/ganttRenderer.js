@@ -116,7 +116,7 @@ export default class GanttRenderer {
         });
     }
 
-    make_side_container() {
+    make_side_header() {
         // Check for existing side-header to avoid duplication
         if (this.gantt.$sideHeader) {
             console.log(
