@@ -118,20 +118,20 @@ export default class GanttRenderer {
 
     make_side_header() {
         // Check for existing side-header to avoid duplication
-        if (this.gantt.$sideHeader) {
+        if (this.gantt.$side_header) {
             console.log(
                 'Reusing existing side-header:',
-                this.gantt.$sideHeader,
+                this.gantt.$side_header,
             );
             return;
         }
 
         // Create side-header
-        this.gantt.$sideHeader = create_el({
+        this.gantt.$side_header = create_el({
             classes: 'side-header',
             append_to: this.gantt.$upper_header,
         });
-        console.log('Side header created:', this.gantt.$sideHeader);
+        console.log('Side header created:', this.gantt.$side_header);
 
         if (this.gantt.options.view_mode_select) {
             // Log view_modes
@@ -140,7 +140,7 @@ export default class GanttRenderer {
             // Create dropdown container
             const $dropdownContainer = create_el({
                 classes: 'viewmode-select',
-                append_to: this.gantt.$sideHeader,
+                append_to: this.gantt.$side_header,
             });
             console.log('Dropdown container created:', $dropdownContainer);
 
@@ -161,10 +161,8 @@ export default class GanttRenderer {
             );
             if ($dropdownMenu) {
                 console.log('Reusing existing dropdown menu:', $dropdownMenu);
-                // Clear existing options to reset
-                $dropdownMenu.innerHTML = '';
+                $dropdownMenu.innerHTML = ''; // Clear existing options
             } else {
-                // Create new dropdown menu
                 $dropdownMenu = create_el({
                     classes: 'dropdown-menu',
                     append_to: document.body,
@@ -174,7 +172,7 @@ export default class GanttRenderer {
             }
             this.gantt.$dropdownMenu = $dropdownMenu;
 
-            // Clean up any duplicate menus
+            // Clean up duplicate menus
             const duplicateMenus = document.querySelectorAll(
                 '.dropdown-menu:not([data-id="gantt-viewmode-menu"])',
             );
@@ -249,6 +247,9 @@ export default class GanttRenderer {
                                     );
                                 $option.classList.add('selected');
                                 $dropdownMenu.classList.remove('show');
+                                console.log(
+                                    'Dropdown closed after option select',
+                                );
                             }
                         });
                     }
@@ -273,21 +274,28 @@ export default class GanttRenderer {
             // Toggle dropdown menu
             const toggleDropdown = (e) => {
                 e.stopPropagation();
-                const rect = $dropdownTrigger.getBoundingClientRect();
-                $dropdownMenu.style.position = 'fixed';
-                $dropdownMenu.style.top = `${rect.bottom + window.pageYOffset}px`;
-                $dropdownMenu.style.left = `${rect.left + window.pageXOffset}px`;
-                $dropdownMenu.style.minWidth = `${rect.width}px`;
-                $dropdownMenu.classList.toggle('show');
+                const isOpen = $dropdownMenu.classList.contains('show');
+                $dropdownMenu.classList.toggle('show', !isOpen);
+                if (!isOpen) {
+                    const rect = $dropdownTrigger.getBoundingClientRect();
+                    $dropdownMenu.style.position = 'fixed';
+                    $dropdownMenu.style.top = `${rect.bottom + window.pageYOffset}px`;
+                    $dropdownMenu.style.left = `${rect.left + window.pageXOffset}px`;
+                    $dropdownMenu.style.minWidth = `${rect.width}px`;
+                    console.log('Trigger rect:', rect);
+                }
                 console.log(
                     'Dropdown toggled:',
                     $dropdownMenu.classList.contains('show'),
                 );
             };
-            $dropdownTrigger.removeEventListener(
-                'click',
-                this.gantt.dropdownToggleHandler,
-            );
+            // Remove existing listener if any
+            if (this.gantt.dropdownToggleHandler) {
+                $dropdownTrigger.removeEventListener(
+                    'click',
+                    this.gantt.dropdownToggleHandler,
+                );
+            }
             this.gantt.dropdownToggleHandler = toggleDropdown;
             $dropdownTrigger.addEventListener('click', toggleDropdown);
 
@@ -298,14 +306,17 @@ export default class GanttRenderer {
                     !$dropdownMenu.contains(e.target)
                 ) {
                     $dropdownMenu.classList.remove('show');
-                    console.log('Dropdown closed');
+                    console.log('Dropdown closed via outside click');
                 }
             };
-            document.removeEventListener(
-                'click',
-                this.gantt.dropdownCloseHandler,
-                { capture: true },
-            );
+            // Remove existing listener if any
+            if (this.gantt.dropdownCloseHandler) {
+                document.removeEventListener(
+                    'click',
+                    this.gantt.dropdownCloseHandler,
+                    { capture: true },
+                );
+            }
             this.gantt.dropdownCloseHandler = closeDropdown;
             document.addEventListener('click', closeDropdown, {
                 capture: true,
@@ -313,50 +324,52 @@ export default class GanttRenderer {
         }
 
         if (this.gantt.options.today_button) {
-            const $todayButton = create_el({
+            const $today_button = create_el({
                 tag: 'button',
                 classes: 'today-button',
-                append_to: this.gantt.$sideHeader,
+                append_to: this.gantt.$side_header,
             });
-            $todayButton.textContent = 'Today';
-            $todayButton.onclick = this.gantt.scroll_current.bind(this.gantt);
-            this.gantt.$todayButton = $todayButton;
-            console.log('Today button created:', $todayButton);
+            $today_button.textContent = 'Today';
+            $today_button.onclick = this.gantt.scroll_current.bind(this.gantt);
+            this.gantt.$today_button = $today_button;
+            console.log('Today button created:', $today_button);
         }
 
         if (this.gantt.options.player_button) {
-            const $playerResetButton = create_el({
+            const player_reset_button = create_el({
                 tag: 'button',
                 classes: 'player-reset-button',
-                append_to: this.gantt.$sideHeader,
+                append_to: this.gantt.$side_header,
             });
             if (this.gantt.options.player_use_fa) {
-                $playerResetButton.classList.add('fas', 'fa-redo');
+                player_reset_button.classList.add('fas', 'fa-redo');
             } else {
-                $playerResetButton.textContent = 'Reset';
+                player_reset_button.textContent = 'Reset';
             }
-            $playerResetButton.onclick = this.gantt.reset_play.bind(this.gantt);
-            this.gantt.$playerResetButton = $playerResetButton;
-            console.log('Player reset button created:', $playerResetButton);
+            player_reset_button.onclick = this.gantt.reset_play.bind(
+                this.gantt,
+            );
+            this.gantt.$player_reset_button = player_reset_button;
+            console.log('Player reset button created:', player_reset_button);
         }
 
         if (this.gantt.options.player_button) {
-            const $playerButton = create_el({
+            const $player_button = create_el({
                 tag: 'button',
                 classes: 'player-button',
-                append_to: this.gantt.$sideHeader,
+                append_to: this.gantt.$side_header,
             });
             if (this.gantt.options.player_use_fa) {
-                $playerButton.classList.add(
+                $player_button.classList.add(
                     'fas',
                     this.gantt.options.player_state ? 'fa-pause' : 'fa-play',
                 );
             } else {
-                $playerButton.textContent = 'Play';
+                $player_button.textContent = 'Play';
             }
-            $playerButton.onclick = this.gantt.toggle_play.bind(this.gantt);
-            this.gantt.$playerButton = $playerButton;
-            console.log('Player button created:', $playerButton);
+            $player_button.onclick = this.gantt.toggle_play.bind(this.gantt);
+            this.gantt.$player_button = $player_button;
+            console.log('Player button created:', $player_button);
         }
     }
 
