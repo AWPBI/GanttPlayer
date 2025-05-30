@@ -123,31 +123,85 @@ export default class GanttRenderer {
         this.gantt.$upper_header.prepend(this.gantt.$side_header);
 
         if (this.gantt.options.view_mode_select) {
-            const $select = document.createElement('select');
-            $select.classList.add('viewmode-select');
+            // Create custom dropdown container
+            const $dropdownContainer = create_el({
+                classes: 'custom-dropdown',
+                append_to: this.gantt.$side_header,
+            });
 
-            const $el = document.createElement('option');
-            $el.selected = true;
-            $el.disabled = true;
-            $el.textContent = 'Mode';
-            $select.appendChild($el);
+            // Create dropdown trigger
+            const $dropdownTrigger = create_el({
+                classes: 'dropdown-trigger',
+                append_to: $dropdownContainer,
+            });
+            $dropdownTrigger.textContent = 'Mode';
 
+            // Create dropdown menu
+            const $dropdownMenu = create_el({
+                classes: 'dropdown-menu',
+                append_to: $dropdownContainer,
+            });
+
+            // Populate dropdown options
+            const $optionsList = create_el({
+                tag: 'ul',
+                append_to: $dropdownMenu,
+            });
+
+            // Add default "Mode" option (disabled)
+            const $defaultOption = create_el({
+                tag: 'li',
+                classes: 'dropdown-option disabled',
+                append_to: $optionsList,
+            });
+            $defaultOption.textContent = 'Mode';
+            $defaultOption.dataset.value = '';
+
+            // Add view mode options
             for (const mode of this.gantt.options.view_modes) {
-                const $option = document.createElement('option');
-                $option.value = mode.name;
+                const $option = create_el({
+                    tag: 'li',
+                    classes: 'dropdown-option',
+                    append_to: $optionsList,
+                });
                 $option.textContent = mode.name;
+                $option.dataset.value = mode.name;
                 if (mode.name === this.gantt.config.view_mode.name) {
-                    $option.selected = true;
+                    $dropdownTrigger.textContent = mode.name; // Set current mode as trigger text
+                    $option.classList.add('selected');
                 }
-                $select.appendChild($option);
+
+                // Handle option click
+                $option.addEventListener('click', () => {
+                    if ($option.dataset.value) {
+                        this.gantt.viewManager.change_view_mode(
+                            $option.dataset.value,
+                            true,
+                        );
+                        this.gantt.reset_play();
+                        this.gantt.scrollManager.set_scroll_position('start');
+                        $dropdownTrigger.textContent = $option.textContent;
+                        // Update selected state
+                        $optionsList
+                            .querySelectorAll('.dropdown-option')
+                            .forEach((opt) => opt.classList.remove('selected'));
+                        $option.classList.add('selected');
+                        $dropdownMenu.classList.remove('open');
+                    }
+                });
             }
 
-            $select.addEventListener('change', () => {
-                this.gantt.viewManager.change_view_mode($select.value, true);
-                this.gantt.reset_play();
-                this.gantt.scrollManager.set_scroll_position('start');
+            // Toggle dropdown menu on trigger click
+            $dropdownTrigger.addEventListener('click', () => {
+                $dropdownMenu.classList.toggle('open');
             });
-            this.gantt.$side_header.appendChild($select);
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!$dropdownContainer.contains(e.target)) {
+                    $dropdownMenu.classList.remove('open');
+                }
+            });
         }
 
         if (this.gantt.options.today_button) {
