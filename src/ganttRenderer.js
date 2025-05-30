@@ -237,7 +237,7 @@ export default class GanttRenderer {
             ) {
                 for (const mode of this.gantt.options.view_modes) {
                     if (!mode || !mode.name) {
-                        console.warn('Invalid view mode:', mode);
+                        console.warn('Invalid view mode: ', mode);
                         continue;
                     }
                     const $option = create_el({
